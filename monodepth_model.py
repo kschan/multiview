@@ -78,7 +78,9 @@ class MonodepthModel(object):
             ratio = 2 ** (i + 1)
             nh = h / ratio
             nw = w / ratio
-            scaled_imgs.append(tf.image.resize_area(img, [nh, nw]))
+            scaled = tf.image.resize_area(img, [nh, nw])
+            # need to keep only the first 3 channels corresponding to the first image
+            scaled_imgs.append(scaled[:,:,:,:3])
         return scaled_imgs
 
     def generate_image_left(self, img, disp):

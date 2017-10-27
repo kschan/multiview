@@ -50,6 +50,7 @@ parser.add_argument('--log_directory',             type=str,   help='directory t
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a specific checkpoint to load', default='')
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
+# parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 
 args = parser.parse_args()
 
@@ -92,7 +93,7 @@ def train(params):
         print("total number of samples: {}".format(num_training_samples))
         print("total number of steps: {}".format(num_total_steps))
 
-        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
+        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)  # changed to add num_views
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
 

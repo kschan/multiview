@@ -23,6 +23,7 @@ class MonodepthDataloader(object):
         self.params = params
         self.dataset = dataset
         self.mode = mode
+        self.num_views = num_views::x
 
         self.left_image_batch  = None
         self.right_image_batch = None
@@ -32,16 +33,23 @@ class MonodepthDataloader(object):
         _, line = line_reader.read(input_queue)
 
         split_line = tf.string_split([line]).values
+        num_views = len(split_line) / 2
 
         # we load only one image for test, except if we trained a stereo model
         if mode == 'test' and not self.params.do_stereo:
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
             left_image_o  = self.read_image(left_image_path)
         else:
-            left_image_path  = tf.string_join([self.data_path, split_line[0]])
-            right_image_path = tf.string_join([self.data_path, split_line[1]])
-            left_image_o  = self.read_image(left_image_path)
-            right_image_o = self.read_image(right_image_path)
+            left_images_o = []
+            right_images_o = []
+            for i in range(num_views):
+                left_image_path  = tf.string_join([self.data_path, split_line[i]])
+                right_image_path = tf.string_join([self.data_path, split_line[i + num_views]])
+                left_image_o.append(self.read_image(left_image_path))
+                right_image_o.append(self.read_image(right_image_path))
+
+            right_image_o = tf.concat(right_image_o, axis = 2) # [None, None, 3*num_views]
+            left_image_o = tf.concat(left_image_o, axis = 2)
 
         if mode == 'train':
             # randomly flip images
@@ -53,12 +61,12 @@ class MonodepthDataloader(object):
             do_augment  = tf.random_uniform([], 0, 1)
             left_image, right_image = tf.cond(do_augment > 0.5, lambda: self.augment_image_pair(left_image, right_image), lambda: (left_image, right_image))
 
-            left_image.set_shape( [None, None, 3])
-            right_image.set_shape([None, None, 3])
+            left_image.set_shape( [None, None, 3 * num_views])
+            right_image.set_shape([None, None, 3 * num_views])
 
             # capacity = min_after_dequeue + (num_threads + a small safety margin) * batch_size
             min_after_dequeue = 2048
-            capacity = min_after_dequeue + 4 * params.batch_size
+            capacity = min_after_dequeue + (params.num_threads + 4) * params.batch_size
             self.left_image_batch, self.right_image_batch = tf.train.shuffle_batch([left_image, right_image],
                         params.batch_size, capacity, min_after_dequeue, params.num_threads)
 
@@ -69,6 +77,14 @@ class MonodepthDataloader(object):
             if self.params.do_stereo:
                 self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)
                 self.right_image_batch.set_shape( [2, None, None, 3])
+
+    def flip_stacked_left_right(images):
+        # images is a [num_views, None, None, 3] tensor
+        num_views = tf.shape(images)[0]
+        flipped = []
+        for i in range(num_views):
+            flipped.append(tf.image.flip_left_right(images[i]))
+        return tf.stack(flip)
 
     def augment_image_pair(self, left_image, right_image):
         # randomly shift gamma
