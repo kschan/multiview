@@ -18,20 +18,20 @@ def string_length_tf(t):
 class MonodepthDataloader(object):
     """monodepth dataloader"""
 
-    def __init__(self, data_path, filenames_file, params, dataset, mode):
+    def __init__(self, data_path, filenames_file, params, dataset, mode, num_views):
         self.data_path = data_path
         self.params = params
         self.dataset = dataset
         self.mode = mode
         self.left_image_batch  = None
         self.right_image_batch = None
+        self.num_views = num_views
 
         input_queue = tf.train.string_input_producer([filenames_file], shuffle=False)
         line_reader = tf.TextLineReader()
         _, line = line_reader.read(input_queue)
 
         split_line = tf.string_split([line]).values
-        num_views = len(split_line[0]) / 2
 
         # we load only one image for test, except if we trained a stereo model
         if mode == 'test' and not self.params.do_stereo:
@@ -43,11 +43,11 @@ class MonodepthDataloader(object):
             for i in range(num_views):
                 left_image_path  = tf.string_join([self.data_path, split_line[i]])
                 right_image_path = tf.string_join([self.data_path, split_line[i + num_views]])
-                left_image_o.append(self.read_image(left_image_path))
-                right_image_o.append(self.read_image(right_image_path))
+                left_images_o.append(self.read_image(left_image_path))
+                right_images_o.append(self.read_image(right_image_path))
 
-            right_image_o = tf.concat(right_image_o, axis = 2) # [None, None, 3*num_views]
-            left_image_o = tf.concat(left_image_o, axis = 2)
+            right_image_o = tf.concat(right_images_o, axis = 2) # [None, None, 3*num_views]
+            left_image_o = tf.concat(left_images_o, axis = 2)
 
         if mode == 'train':
             # randomly flip images

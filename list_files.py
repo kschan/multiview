@@ -27,8 +27,8 @@ for (long_root, dirs, files) in dirs:
 		if root[-13:-5] == 'image_03':
 			image_02_path = root[:-13] + 'image_02/data'
 			for i in range(num_views-1,len(sorted_files)):
-				right_views = ['/'.join([root[1:], sorted_files[i - j]]) for j in range(num_views)]
-				left_views = ['/'.join([image_02_path[1:], sorted_files[i - j]]) for j in range(num_views)]
+				right_views = ['/'.join([root, sorted_files[i - j]]) for j in range(num_views)]
+				left_views = ['/'.join([image_02_path, sorted_files[i - j]]) for j in range(num_views)]
 
 				out.write(' '.join(left_views + right_views) + '\n')
 
