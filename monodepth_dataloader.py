@@ -23,8 +23,6 @@ class MonodepthDataloader(object):
         self.params = params
         self.dataset = dataset
         self.mode = mode
-        self.num_views = num_views::x
-
         self.left_image_batch  = None
         self.right_image_batch = None
 
@@ -33,7 +31,7 @@ class MonodepthDataloader(object):
         _, line = line_reader.read(input_queue)
 
         split_line = tf.string_split([line]).values
-        num_views = len(split_line) / 2
+        num_views = len(split_line[0]) / 2
 
         # we load only one image for test, except if we trained a stereo model
         if mode == 'test' and not self.params.do_stereo:
