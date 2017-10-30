@@ -20,7 +20,7 @@ import time
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from monodepth_model import *
-from monodepth_dataloader import *
+from monodepth_dataloader_tfrecord  import *
 from average_gradients import *
 import matplotlib.pyplot as plt
 
@@ -31,7 +31,7 @@ parser.add_argument('--model_name',                type=str,   help='model name'
 parser.add_argument('--encoder',                   type=str,   help='type of encoder, vgg or resnet50', default='vgg')
 parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti, or cityscapes', default='kitti')
 parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
-parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
+parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file')
 parser.add_argument('--input_height',              type=int,   help='input height', default=256)
 parser.add_argument('--input_width',               type=int,   help='input width', default=512)
 parser.add_argument('--batch_size',                type=int,   help='batch size', default=8)
@@ -74,7 +74,7 @@ def train(params):
     """Training loop."""
 
     with tf.Graph().as_default(), tf.device('/cpu:0'):
-        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
+        dataloader = MonodepthDataloader(args.data_path, None, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
 
@@ -99,14 +99,12 @@ def train(params):
         print "LEFT SHAPE: ", tf.shape(left).eval(session=sess)
 
         for step in range(start_step, 1000):
-            l, r, path = sess.run([left, right, dataloader.first_image_path])
-            print path
+            l, r = sess.run([left, right])
+
             print "first"
             plt.imshow(l[0, :, :, :3])
             plt.show()
-            print "second"
-            plt.imshow(l[0, :, :, 3:])
-            plt.show()
+
 
 
 
