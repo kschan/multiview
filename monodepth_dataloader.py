@@ -38,16 +38,20 @@ class MonodepthDataloader(object):
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
             left_image_o  = self.read_image(left_image_path)
         else:
-            left_images_o = []
-            right_images_o = []
-            for i in range(num_views):
-                left_image_path  = tf.string_join([self.data_path, split_line[i]])
-                right_image_path = tf.string_join([self.data_path, split_line[i + num_views]])
-                left_images_o.append(self.read_image(left_image_path))
-                right_images_o.append(self.read_image(right_image_path))
+            # # for i in range(num_views):
+            #     left_image_path  = tf.string_join([self.data_path, split_line[i]])
+            #     right_image_path = tf.string_join([self.data_path, split_line[i + num_views]])
+            #     left_images_o.append(self.read_image(left_image_path))
+            #     right_images_o.append(self.read_image(right_image_path))
 
-            right_image_o = tf.concat(right_images_o, axis = 2) # [None, None, 3*num_views]
-            left_image_o = tf.concat(left_images_o, axis = 2)
+            self.first_image_path = tf.string_join([self.data_path, split_line[0]])
+            left_image_o_1 = self.read_image(tf.string_join([self.data_path, split_line[0]]))
+            left_image_o_2 = self.read_image(tf.string_join([self.data_path, split_line[1]]))
+            right_image_o_1 = self.read_image(tf.string_join([self.data_path, split_line[2]]))
+            right_image_o_2 = self.read_image(tf.string_join([self.data_path, split_line[3]]))
+
+            right_image_o = tf.concat([right_image_o_1, right_image_o_2], axis = 2) # [None, None, 3*num_views]
+            left_image_o = tf.concat([left_image_o_1, left_image_o_2], axis = 2)
 
         if mode == 'train':
             # randomly flip images
@@ -55,8 +59,9 @@ class MonodepthDataloader(object):
             left_image  = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
             right_image = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
 
-            # randomly augment images
+            # # randomly augment images
             do_augment  = tf.random_uniform([], 0, 1)
+            do_augment = tf.constant(1.)
             left_image, right_image = tf.cond(do_augment > 0.5, lambda: self.augment_image_pair(left_image, right_image), lambda: (left_image, right_image))
 
             left_image.set_shape( [None, None, 3 * num_views])
@@ -85,6 +90,9 @@ class MonodepthDataloader(object):
         return tf.stack(flip)
 
     def augment_image_pair(self, left_image, right_image):
+        left_image_aug = left_image
+        right_image_aug = right_image
+
         # randomly shift gamma
         random_gamma = tf.random_uniform([], 0.8, 1.2)
         left_image_aug  = left_image  ** random_gamma
@@ -96,9 +104,9 @@ class MonodepthDataloader(object):
         right_image_aug = right_image_aug * random_brightness
 
         # randomly shift color
-        random_colors = tf.random_uniform([3], 0.8, 1.2)
+        random_colors = tf.random_uniform([3*self.num_views], 0.8, 1.2)
         white = tf.ones([tf.shape(left_image)[0], tf.shape(left_image)[1]])
-        color_image = tf.stack([white * random_colors[i] for i in range(3)], axis=2)
+        color_image = tf.stack([white * random_colors[i] for i in range(3*self.num_views)], axis=2)
         left_image_aug  *= color_image
         right_image_aug *= color_image
 
