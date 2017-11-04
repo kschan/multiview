@@ -20,8 +20,8 @@ import time
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from monodepth_model import *
-# from monodepth_dataloader import *
-from monodepth_dataloader_tfrecord import *
+from monodepth_dataloader import *
+# from monodepth_dataloader_tfrecord import *
 from average_gradients import *
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
@@ -182,8 +182,9 @@ def train(params):
 
 def test(params):
     """Test function."""
+    # data_path, filenames_file, mode, num_views, model_name, output_directory, log_directory
 
-    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
+    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)
     left  = dataloader.left_image_batch
     right = dataloader.right_image_batch
 
@@ -204,9 +205,12 @@ def test(params):
 
     # RESTORE
     if args.checkpoint_path == '':
+        # print args.log_directory + '/' + args.model_name
         restore_path = tf.train.latest_checkpoint(args.log_directory + '/' + args.model_name)
     else:
         restore_path = args.checkpoint_path.split(".")[0]
+    
+    print "RESTORE PATH", restore_path
     train_saver.restore(sess, restore_path)
 
     num_test_samples = count_text_lines(args.filenames_file)
@@ -225,7 +229,13 @@ def test(params):
     if args.output_directory == '':
         output_directory = os.path.dirname(args.checkpoint_path)
     else:
-        output_directory = args.output_directory
+        output_directory = args.output_directory + '/' + args.model_name
+    
+    try:
+        os.makedirs(output_directory)
+    except OSError as e:
+        pass
+
     np.save(output_directory + '/disparities.npy',    disparities)
     np.save(output_directory + '/disparities_pp.npy', disparities_pp)
 

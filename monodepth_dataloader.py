@@ -34,16 +34,16 @@ class MonodepthDataloader(object):
         split_line = tf.string_split([line]).values
 
         # we load only one image for test, except if we trained a stereo model
-        if mode == 'test' and not self.params.do_stereo:
+        # if mode == 'test' and not self.params.do_stereo:
+        #     left_image_path  = tf.string_join([self.data_path, split_line[0]])
+        #     left_image_o  = self.read_image(left_image_path)
+        # else:
+        if num_views == 1:
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
+            right_image_path = tf.string_join([self.data_path, split_line[1]])
             left_image_o  = self.read_image(left_image_path)
+            right_image_o = self.read_image(right_image_path)
         else:
-            # # for i in range(num_views):
-            #     left_image_path  = tf.string_join([self.data_path, split_line[i]])
-            #     right_image_path = tf.string_join([self.data_path, split_line[i + num_views]])
-            #     left_images_o.append(self.read_image(left_image_path))
-            #     right_images_o.append(self.read_image(right_image_path))
-
             self.first_image_path = tf.string_join([self.data_path, split_line[0]])
             left_image_o_1 = self.read_image(tf.string_join([self.data_path, split_line[0]]))
             left_image_o_2 = self.read_image(tf.string_join([self.data_path, split_line[1]]))
@@ -75,7 +75,7 @@ class MonodepthDataloader(object):
 
         elif mode == 'test':
             self.left_image_batch = tf.stack([left_image_o,  tf.image.flip_left_right(left_image_o)],  0)
-            self.left_image_batch.set_shape( [2, None, None, 3])
+            self.left_image_batch.set_shape( [2, None, None, 3*num_views])
 
             if self.params.do_stereo:
                 self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)

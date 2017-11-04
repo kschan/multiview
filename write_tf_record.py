@@ -45,25 +45,25 @@ for i in range(len(lefts)):
 
 writer.close()
 
-record_iterator = tf.python_io.tf_record_iterator(path=kitti + "/kitti.tfrecords")
-for string_record in record_iterator:
-    example = tf.train.Example()
+# record_iterator = tf.python_io.tf_record_iterator(path=kitti + "/kitti.tfrecords")
+# for string_record in record_iterator:
+#     example = tf.train.Example()
 
-    example.ParseFroStmring(string_record)
+#     example.ParseFromString(string_record)
     
-    left_string = (example.features.feature['left']
-                                  .bytes_list
-                                  .value[0])
+#     left_string = (example.features.feature['left']
+#                                   .bytes_list
+#                                   .value[0])
     
-    right_string = (example.features.feature['right']
-                                .bytes_list
-                                .value[0])
+#     right_string = (example.features.feature['right']
+#                                 .bytes_list
+#                                 .value[0])
 
-    left_img = np.fromstring(left_string, dtype=np.uint8).reshape((256, 512, -1))
-    right_img = np.fromstring(right_string, dtype=np.uint8).reshape((256, 512, -1))
+#     left_img = np.fromstring(left_string, dtype=np.uint8).reshape((256, 512, -1))
+#     right_img = np.fromstring(right_string, dtype=np.uint8).reshape((256, 512, -1))
 
-    plt.imshow(left_img)
-    plt.title("left img")
-    plt.imshow(right_img)
-    plt.title("right_img")
-    plt.show()
+#     plt.imshow(left_img)
+#     plt.title("left img")
+#     plt.imshow(right_img)
+#     plt.title("right_img")
+#     plt.show()
