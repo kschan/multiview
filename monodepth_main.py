@@ -162,10 +162,13 @@ def train(params):
 
         print "LEFT SHAPE: ", tf.shape(left).eval(session=sess)
 
+        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+        num_total_steps = 100
+
         for step in range(start_step, num_total_steps):
-            print step
             before_op_time = time.time()
-            _, loss_value = sess.run([apply_gradient_op, total_loss])
+            _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
@@ -180,6 +183,10 @@ def train(params):
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
 
+        fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+        chrome_trace = fetched_timeline.generate_chrome_trace_format()
+        with open('timeline_01.json', 'w') as f:
+            f.write(chrome_trace)
 def test(params):
     """Test function."""
     # data_path, filenames_file, mode, num_views, model_name, output_directory, log_directory
