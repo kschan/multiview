@@ -117,8 +117,12 @@ class MonodepthModel(object):
         weights_x = [tf.exp(-tf.reduce_mean(tf.abs(g), 3, keep_dims=True)) for g in image_gradients_x]
         weights_y = [tf.exp(-tf.reduce_mean(tf.abs(g), 3, keep_dims=True)) for g in image_gradients_y]
 
-        smoothness_x = [disp_gradients_x[i] * weights_x[i] for i in range(4)]
-        smoothness_y = [disp_gradients_y[i] * weights_y[i] for i in range(4)]
+        # smoothness_x = [disp_gradients_x[i] * weights_x[i] for i in range(4)]
+        # smoothness_y = [disp_gradients_y[i] * weights_y[i] for i in range(4)]
+
+        smoothness_x = tf.multiply(disp_gradients_x, weights_x)
+        smoothness_y = tf.multiply(disp_gradients_y, weights_y)
+        
         return smoothness_x + smoothness_y
 
     def get_disp(self, x):

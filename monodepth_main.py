@@ -23,6 +23,7 @@ from monodepth_model import *
 from monodepth_dataloader import *
 # from monodepth_dataloader_tfrecord import *
 from average_gradients import *
+from tensorflow.python.client import timeline
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
 
@@ -166,6 +167,7 @@ def train(params):
         run_metadata = tf.RunMetadata()
         num_total_steps = 100
 
+        print "STARTING"
         for step in range(start_step, num_total_steps):
             before_op_time = time.time()
             _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
@@ -187,6 +189,7 @@ def train(params):
         chrome_trace = fetched_timeline.generate_chrome_trace_format()
         with open('timeline_01.json', 'w') as f:
             f.write(chrome_trace)
+            
 def test(params):
     """Test function."""
     # data_path, filenames_file, mode, num_views, model_name, output_directory, log_directory
