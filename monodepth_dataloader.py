@@ -131,6 +131,9 @@ class MonodepthDataloader(object):
             image  =  image[:crop_height,:,:]
 
         image  = tf.image.convert_image_dtype(image,  tf.float32)
-        image  = tf.image.resize_images(image,  [self.params.height, self.params.width], tf.image.ResizeMethod.AREA)
-
+        
+        if self.mode != 'train':
+            image  = tf.image.resize_images(image,  [self.params.height, self.params.width], tf.image.ResizeMethod.AREA)
+        else:
+            image.set_shape([256, 512, 3])
         return image

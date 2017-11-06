@@ -117,11 +117,11 @@ class MonodepthModel(object):
         weights_x = [tf.exp(-tf.reduce_mean(tf.abs(g), 3, keep_dims=True)) for g in image_gradients_x]
         weights_y = [tf.exp(-tf.reduce_mean(tf.abs(g), 3, keep_dims=True)) for g in image_gradients_y]
 
-        # smoothness_x = [disp_gradients_x[i] * weights_x[i] for i in range(4)]
-        # smoothness_y = [disp_gradients_y[i] * weights_y[i] for i in range(4)]
+        smoothness_x = [disp_gradients_x[i] * weights_x[i] for i in range(4)]
+        smoothness_y = [disp_gradients_y[i] * weights_y[i] for i in range(4)]
 
-        smoothness_x = tf.multiply(disp_gradients_x, weights_x)
-        smoothness_y = tf.multiply(disp_gradients_y, weights_y)
+        # smoothness_x = tf.multiply(disp_gradients_x, weights_x)
+        # smoothness_y = tf.multiply(disp_gradients_y, weights_y)
         
         return smoothness_x + smoothness_y
 
@@ -184,8 +184,8 @@ class MonodepthModel(object):
             upconv = self.upconv
 
         with tf.variable_scope('encoder'):
-            a = np.random.normal(0, .2, size=(32, 7,7,3))
-            b = np.random.normal(1, .2, size=(32, 7,7,3))
+            a = np.random.normal(0.5, .2, size=(32, 7,7,3))
+            b = np.random.normal(-.5, .2, size=(32, 7,7,3))
             c = np.concatenate((a, b), axis=3)  # (32, 7, 7, 6)
             first_layer_initializer = tf.constant_initializer(1)
             conv1 = self.conv_block(self.model_input,  32, 7, first_layer_initializer) # H/2
