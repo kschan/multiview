@@ -18,11 +18,12 @@ import argparse
 import re
 import time
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
-from monodepth_model import *
-from monodepth_dataloader_tfrecord  import *
+# import tensorflow.contrib.slim as slim
+# from monodepth_model import *
+from monodepth_dataloader import *
 from average_gradients import *
 import matplotlib.pyplot as plt
+from collections import namedtuple
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
 
@@ -50,37 +51,25 @@ parser.add_argument('--log_directory',             type=str,   help='directory t
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a specific checkpoint to load', default='')
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
+
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 
 args = parser.parse_args()
 
-def post_process_disparity(disp):
-    _, h, w = disp.shape
-    l_disp = disp[0,:,:]
-    r_disp = np.fliplr(disp[1,:,:])
-    m_disp = 0.5 * (l_disp + r_disp)
-    l, _ = np.meshgrid(np.linspace(0, 1, w), np.linspace(0, 1, h))
-    l_mask = 1.0 - np.clip(20 * (l - 0.05), 0, 1)
-    r_mask = np.fliplr(l_mask)
-    return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
-
-def count_text_lines(file_path):
-    f = open(file_path, 'r')
-    lines = f.readlines()
-    f.close()
-    return len(lines)
 
 def train(params):
     """Training loop."""
 
     with tf.Graph().as_default(), tf.device('/cpu:0'):
-        dataloader = MonodepthDataloader(args.data_path, None, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
+        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
+        oxts  = dataloader.oxts_batch
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
+        oxts_splits = tf.split(oxts,   args.num_gpus, 0)
 
         # SESSION
         config = tf.ConfigProto(allow_soft_placement=True)
@@ -91,22 +80,42 @@ def train(params):
         sess.run(tf.local_variables_initializer())
         coordinator = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coordinator)
-
+        # print dataloader.all_oxts.eval(session=sess)
         # GO!
         start_step = 0
         start_time = time.time()
 
         print "LEFT SHAPE: ", tf.shape(left).eval(session=sess)
+        print "odometry shape: ", tf.shape(oxts).eval(session=sess) # I expect (batch_size, 6)
 
         for step in range(start_step, 1000):
-            l, r = sess.run([left, right])
+            l, r, odometry = sess.run([left, right, oxts])
 
-            print "first"
+            plt.subplot(211)
             plt.imshow(l[0, :, :, :3])
+            plt.title('first image')
+            plt.subplot(212)
+            plt.imshow(l[0, :, :, 3:])
+            plt.title('second image')
+
+            print odometry[0,:]
+
             plt.show()
 
 
-
+monodepth_parameters = namedtuple('parameters', 
+                        'encoder, '
+                        'height, width, '
+                        'batch_size, '
+                        'num_threads, '
+                        'num_epochs, '
+                        'do_stereo, '
+                        'wrap_mode, '
+                        'use_deconv, '
+                        'alpha_image_loss, '
+                        'disp_gradient_loss_weight, '
+                        'lr_loss_weight, '
+                        'full_summary')
 
 def main(_):
 
@@ -124,11 +133,7 @@ def main(_):
         disp_gradient_loss_weight=args.disp_gradient_loss_weight,
         lr_loss_weight=args.lr_loss_weight,
         full_summary=args.full_summary)
-
-    if args.mode == 'train':
-        train(params)
-    elif args.mode == 'test':
-        test(params)
+    train(params)
 
 if __name__ == '__main__':
     tf.app.run()

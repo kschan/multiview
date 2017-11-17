@@ -1,4 +1,4 @@
-# Copyright UCL Business plc 2017. Patent Pending. All rights reserved. 
+# Copyright UCL Business plc 2017. Patent Pending. All ri1ghts reserved. 
 #
 # The MonoDepth Software is licensed under the terms of the UCLB ACP-A licence
 # which allows for non-commercial use only, the full terms of which are made
@@ -11,6 +11,8 @@
 """
 
 import tensorflow as tf
+import numpy as np
+from constants import *
 
 def string_length_tf(t):
   return tf.py_func(len, [t], [tf.int64])
@@ -38,6 +40,7 @@ class MonodepthDataloader(object):
         #     left_image_path  = tf.string_join([self.data_path, split_line[0]])
         #     left_image_o  = self.read_image(left_image_path)
         # else:
+
         if num_views == 1:
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
             right_image_path = tf.string_join([self.data_path, split_line[1]])
@@ -50,16 +53,53 @@ class MonodepthDataloader(object):
             right_image_o_1 = self.read_image(tf.string_join([self.data_path, split_line[2]]))
             right_image_o_2 = self.read_image(tf.string_join([self.data_path, split_line[3]]))
 
-            right_image_o = tf.concat([right_image_o_1, right_image_o_2], axis = 2) # [None, None, 3*num_views]
-            left_image_o = tf.concat([left_image_o_1, left_image_o_2], axis = 2)
+
+        path = tf.string_split([split_line[0]], delimiter='/').values
+        self.oxts_path = tf.string_join([self.data_path, path[0], '/', path[1], '/oxts/data/', tf.string_split([path[-1]], delimiter='.').values[0], '.txt'])
+        all_oxts_strings = tf.read_file(self.oxts_path)
+        all_oxts_strings = tf.string_split([all_oxts_strings], delimiter=' ')
+        all_oxts_strings = tf.sparse_tensor_to_dense(all_oxts_strings, default_value='0')
+        all_oxts = tf.string_to_number(all_oxts_strings, out_type=tf.float64)
+        all_oxts = tf.reshape(all_oxts, [-1])
+
+        # Velocities
+        # vf_o = oxts[8]    # FORWARD VELOCITY [m/s]
+        # vl_o = oxts[9]    # LEFTWARDS VELOCITY
+        # vu_o = oxts[10]   # UP VELOCITY
+
+        # wf_o = oxts[20]   # FORWARD AXIS ROTATION
+        # wl_o = oxts[21]   # LEFTWARDS AXIS ROTATION
+        # wu_o = oxts[22]   # UPWARDS AXIS ROTATION
+
+        oxts_o = tf.concat([all_oxts[8:11], all_oxts[20:23]], axis=0) / \
+                    np.array([VF_VARIANCE, VL_VARIANCE, VU_VARIANCE, WF_VARIANCE, WL_VARIANCE, WU_VARIANCE])**0.5
+        # normalize oxts according to parameters in constants.py
 
         if mode == 'train':
+
+            # randomly change order of images
+            if num_views != 1:
+                change_order = tf.random_uniform([], 0, 1)  # if this is > 0.5, swap the images so the second image is first 3 layers
+                right_image_o = tf.cond(change_order > 0.5,
+                                    lambda: tf.concat([right_image_o_2, right_image_o_1], axis = 2),
+                                    lambda: tf.concat([right_image_o_1, right_image_o_2], axis = 2)
+                                )
+                left_image_o = tf.cond(change_order > 0.5,
+                                    lambda: tf.concat([left_image_o_2, left_image_o_1], axis = 2),
+                                    lambda: tf.concat([left_image_o_1, left_image_o_2], axis = 2)
+                                )
+                
+                # TODO: This is a bit dodgy because if we flip the order of the images, we are using the odometry informatinon for the (now) second image
+                oxts = tf.cond(change_order > 0.5, lambda: -oxts_o, lambda: oxts_o) 
+
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
             left_image  = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
             right_image = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
+            # If we flip the images left to right, we need to negate horizontal velocity and rotation
+            oxts = tf.cond(do_flip > 0.5, lambda: oxts * np.array([1, -1, 1, 1, -1, 1]), lambda: oxts)
 
-            # # randomly augment images
+            # randomly augment images
             do_augment  = tf.random_uniform([], 0, 1)
             do_augment = tf.constant(1.)
             left_image, right_image = tf.cond(do_augment > 0.5, lambda: self.augment_image_pair(left_image, right_image), lambda: (left_image, right_image))
@@ -70,7 +110,7 @@ class MonodepthDataloader(object):
             # capacity = min_after_dequeue + (num_threads + a small safety margin) * batch_size
             min_after_dequeue = 2048
             capacity = min_after_dequeue + (params.num_threads + 4) * params.batch_size
-            self.left_image_batch, self.right_image_batch = tf.train.shuffle_batch([left_image, right_image],
+            self.left_image_batch, self.right_image_batch, self.oxts_batch = tf.train.shuffle_batch([left_image, right_image, oxts],
                         params.batch_size, capacity, min_after_dequeue, params.num_threads)
 
         elif mode == 'test':
