@@ -37,11 +37,12 @@ monodepth_parameters = namedtuple('parameters',
 class MonodepthModel(object):
     """monodepth model"""
 
-    def __init__(self, params, mode, left, right, reuse_variables=None, model_index=0):
+    def __init__(self, params, mode, left, right, odom, reuse_variables=None, model_index=0):
         self.params = params
         self.mode = mode
         self.left = left
         self.right = right
+        self.odom = odom
         self.model_collection = ['model_' + str(model_index)]
 
         self.reuse_variables = reuse_variables
@@ -177,6 +178,7 @@ class MonodepthModel(object):
 
     def build_vgg_odom(self):
         #set convenience functions
+        dense = tf.layers.dense
         conv = self.conv
         if self.params.use_deconv:
             upconv = self.deconv
@@ -191,6 +193,7 @@ class MonodepthModel(object):
             conv5 = self.conv_block(conv4,            512, 3) # H/32
             conv6 = self.conv_block(conv5,            512, 3) # H/64
             conv7 = self.conv_block(conv6,            512, 3) # H/128
+            conv7_flat = tf.reshape(conv7, [-1])              # this will be [4096,]
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -236,6 +239,13 @@ class MonodepthModel(object):
             iconv1  = conv(concat1,   16, 3, 1)
             self.disp1 = self.get_disp(iconv1)
 
+        with tf.variable_scope('fully_connected'):
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.0)
+            layer_sizes = [1000, 6]
+            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.tanh, kernel_regularizer=regularizer)
+            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
+
+ 
     def build_vgg_init(self):
         #set convenience functions
         conv = self.conv
@@ -436,6 +446,8 @@ class MonodepthModel(object):
                     self.build_vgg()
                 elif self.params.encoder == 'vgg_init':
                     self.build_vgg_init()
+                elif self.params.endocer == 'vgg_odom':
+                    self.build_vgg_odom()
                 elif self.params.encoder == 'resnet50':
                     self.build_resnet50()
                 else:
@@ -499,9 +511,15 @@ class MonodepthModel(object):
             # TOTAL LOSS
             self.total_loss = self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss
 
+            if self.params.encoder == 'vgg_odom':
+                self.odom_loss = tf.losses.mean_squared_error(self.odom, self.odom_prediction)
+                self.total_loss += self.params.odom_loss_weight * self.odom_loss
+
     def build_summaries(self):
         # SUMMARIES
         with tf.device('/cpu:0'):
+            if self.params.encoder == 'vgg_odom':
+                tf.summary.scalar('odom_loss', self.odom_loss, collections=self.model_collection)
             for i in range(4):
                 tf.summary.scalar('ssim_loss_' + str(i), self.ssim_loss_left[i] + self.ssim_loss_right[i], collections=self.model_collection)
                 tf.summary.scalar('l1_loss_' + str(i), self.l1_reconstruction_loss_left[i] + self.l1_reconstruction_loss_right[i], collections=self.model_collection)

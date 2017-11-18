@@ -53,6 +53,7 @@ parser.add_argument('--retrain',                               help='if used wit
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
 
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
+parser.add_argument('--odom_loss_weight'           type=float, help="scaling factor for odometry loss term", default=0.1)
 
 args = parser.parse_args()
 
@@ -98,10 +99,12 @@ def train(params):
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
+        oxts = dataloader.oxts_batch
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
+        oxts_splits  = tf.split(oxts,  args.num_gpus, 0)
 
         tower_grads  = []
         tower_losses = []
@@ -269,6 +272,7 @@ def main(_):
         alpha_image_loss=args.alpha_image_loss,
         disp_gradient_loss_weight=args.disp_gradient_loss_weight,
         lr_loss_weight=args.lr_loss_weight,
+        odom_loss_weight=args.odom_loss_weight,
         full_summary=args.full_summary)
 
     if args.mode == 'train':
