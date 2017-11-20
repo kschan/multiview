@@ -53,7 +53,7 @@ parser.add_argument('--retrain',                               help='if used wit
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
 
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
-parser.add_argument('--odom_loss_weight'           type=float, help="scaling factor for odometry loss term", default=0.1)
+parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=0.1)
 
 args = parser.parse_args()
 
@@ -113,7 +113,7 @@ def train(params):
             for i in xrange(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
 
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], reuse_variables, i)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i)
 
                     loss = model.total_loss
                     tower_losses.append(loss)

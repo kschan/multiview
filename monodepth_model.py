@@ -32,6 +32,7 @@ monodepth_parameters = namedtuple('parameters',
                         'alpha_image_loss, '
                         'disp_gradient_loss_weight, '
                         'lr_loss_weight, '
+                        'odom_loss_weight, '
                         'full_summary')
 
 class MonodepthModel(object):
@@ -193,7 +194,7 @@ class MonodepthModel(object):
             conv5 = self.conv_block(conv4,            512, 3) # H/32
             conv6 = self.conv_block(conv5,            512, 3) # H/64
             conv7 = self.conv_block(conv6,            512, 3) # H/128
-            conv7_flat = tf.reshape(conv7, [-1])              # this will be [4096,]
+            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [4096,]
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -242,8 +243,8 @@ class MonodepthModel(object):
         with tf.variable_scope('fully_connected'):
             regularizer = tf.contrib.layers.l2_regularizer(scale=0.0)
             layer_sizes = [1000, 6]
-            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.tanh, kernel_regularizer=regularizer)
-            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
+            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.tanh, kernel_regularizer=regularizer, reuse=None)
+            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer, reuse=None) # last layer output has linear activation
 
  
     def build_vgg_init(self):
@@ -430,6 +431,7 @@ class MonodepthModel(object):
 
     def build_model(self):
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose], activation_fn=tf.nn.elu):
+            print self.reuse_variables
             with tf.variable_scope('model', reuse=self.reuse_variables):
 
                 self.left_pyramid  = self.scale_pyramid(self.left,  4)
@@ -446,7 +448,7 @@ class MonodepthModel(object):
                     self.build_vgg()
                 elif self.params.encoder == 'vgg_init':
                     self.build_vgg_init()
-                elif self.params.endocer == 'vgg_odom':
+                elif self.params.encoder == 'vgg_odom':
                     self.build_vgg_odom()
                 elif self.params.encoder == 'resnet50':
                     self.build_resnet50()
