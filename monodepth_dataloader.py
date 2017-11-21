@@ -29,7 +29,7 @@ class MonodepthDataloader(object):
         self.right_image_batch = None
         self.num_views = num_views
 
-        input_queue = tf.train.string_input_producer([filenames_file], shuffle=False)
+        input_queue = tf.train.string_input_producer([filenames_file], shuffle=True)
         line_reader = tf.TextLineReader()
         _, line = line_reader.read(input_queue)
 

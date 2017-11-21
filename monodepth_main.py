@@ -114,7 +114,7 @@ def train(params):
                 with tf.device('/gpu:%d' % i):
 
                     model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i)
-
+                   
                     loss = model.total_loss
                     tower_losses.append(loss)
 

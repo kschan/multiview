@@ -510,12 +510,12 @@ class MonodepthModel(object):
             self.lr_right_loss = [tf.reduce_mean(tf.abs(self.left_to_right_disp[i] - self.disp_right_est[i])) for i in range(4)]
             self.lr_loss = tf.add_n(self.lr_left_loss + self.lr_right_loss)
 
+            # ODOM LOSS
+            self.odom_loss = tf.reduce_mean((tf.to_float(self.odom) - self.odom_prediction)**2)
+            # self.total_loss = tf.reduce_mean(self.params.odom_loss_weight * self.odom_loss)
+            
             # TOTAL LOSS
-            self.total_loss = self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss
-
-            if self.params.encoder == 'vgg_odom':
-                self.odom_loss = tf.losses.mean_squared_error(self.odom, self.odom_prediction)
-                self.total_loss += self.params.odom_loss_weight * self.odom_loss
+            self.total_loss = (self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss)*0.0 + self.params.odom_loss_weight * self.odom_loss
 
     def build_summaries(self):
         # SUMMARIES
