@@ -1,0 +1,2 @@
+python monodepth_main.py --mode test --data_path /data/kitti_resized/training/ --filenames_file /data/kitti_resized/training/filenames_2_view.txt --log_directory /data/kitti_resized/logs/ --checkpoint_path $0 --output_directory /data/kitti_resized/training/disp_results
+python utils/evaluate_kitti.py --split kitti --predicted_disp_path /data/kitti_resized/training/disp_results/10_30_multiview2/disparities.npy --gt_path /data/kitti_resized/

@@ -194,7 +194,7 @@ class MonodepthModel(object):
             conv5 = self.conv_block(conv4,            512, 3) # H/32
             conv6 = self.conv_block(conv5,            512, 3) # H/64
             conv7 = self.conv_block(conv6,            512, 3) # H/128
-            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [4096,]
+            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -241,10 +241,10 @@ class MonodepthModel(object):
             self.disp1 = self.get_disp(iconv1)
 
         with tf.variable_scope('fully_connected'):
-            regularizer = tf.contrib.layers.l2_regularizer(scale=0.0)
-            layer_sizes = [1000, 6]
-            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.tanh, kernel_regularizer=regularizer, reuse=None)
-            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer, reuse=None) # last layer output has linear activation
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.00001)
+            layer_sizes = [25, 6]
+            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
+            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
 
  
     def build_vgg_init(self):

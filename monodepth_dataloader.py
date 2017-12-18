@@ -94,10 +94,11 @@ class MonodepthDataloader(object):
 
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
-            left_image  = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
-            right_image = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
+            threshold = 0.5
+            left_image  = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
+            right_image = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
             # If we flip the images left to right, we need to negate horizontal velocity and rotation
-            oxts = tf.cond(do_flip > 0.5, lambda: oxts * np.array([1, -1, 1, 1, -1, 1]), lambda: oxts)
+            oxts = tf.cond(do_flip > threshold, lambda: oxts * np.array([1, -1, 1, 1, -1, 1]), lambda: oxts)
 
             # randomly augment images
             do_augment  = tf.random_uniform([], 0, 1)
