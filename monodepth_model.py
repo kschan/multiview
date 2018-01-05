@@ -241,10 +241,15 @@ class MonodepthModel(object):
             self.disp1 = self.get_disp(iconv1)
 
         with tf.variable_scope('fully_connected'):
-            regularizer = tf.contrib.layers.l2_regularizer(scale=0.00001)
-            layer_sizes = [25, 6]
+            # regularizer = tf.contrib.layers.l2_regularizer(scale=0.000001)
+
+            regularizer = None
+            layer_sizes = [4000, 2000, 1000, 3]
             fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
-            self.odom_prediction = dense(fc1, layer_sizes[1], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
+
+            fc2 = dense(fc1, layer_sizes[1], activation = tf.nn.relu, kernel_regularizer=regularizer)
+            fc3 = dense(fc2, layer_sizes[2], activation = tf.nn.relu)
+            self.odom_prediction = dense(fc3, layer_sizes[3], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
 
  
     def build_vgg_init(self):
@@ -511,7 +516,9 @@ class MonodepthModel(object):
             self.lr_loss = tf.add_n(self.lr_left_loss + self.lr_right_loss)
 
             # ODOM LOSS
-            self.odom_loss = tf.reduce_mean((tf.to_float(self.odom) - self.odom_prediction)**2)
+            self.odom = self.odom[:, :3]
+            # self.odom_loss = tf.reduce_mean((tf.to_float(self.odom) - self.odom_prediction)**2)
+            self.odom_loss = tf.losses.absolute_difference(labels=tf.to_float(self.odom), predictions=self.odom_prediction)
             # self.total_loss = tf.reduce_mean(self.params.odom_loss_weight * self.odom_loss)
             
             # TOTAL LOSS
