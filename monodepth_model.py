@@ -193,8 +193,8 @@ class MonodepthModel(object):
             conv4 = self.conv_block(conv3,            256, 3) # H/16
             conv5 = self.conv_block(conv4,            512, 3) # H/32
             conv6 = self.conv_block(conv5,            512, 3) # H/64
-            conv7 = self.conv_block(conv6,            512, 3) # H/128
-            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
+            conv7 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+            # conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -240,17 +240,21 @@ class MonodepthModel(object):
             iconv1  = conv(concat1,   16, 3, 1)
             self.disp1 = self.get_disp(iconv1)
 
-        with tf.variable_scope('fully_connected'):
+        with tf.variable_scope('egomotion'):
             # regularizer = tf.contrib.layers.l2_regularizer(scale=0.000001)
 
             regularizer = None
-            layer_sizes = [4000, 2000, 1000, 3]
-            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
+            # layer_sizes = [4000, 2000, 1000, 3]
+            # fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
 
-            fc2 = dense(fc1, layer_sizes[1], activation = tf.nn.relu, kernel_regularizer=regularizer)
-            fc3 = dense(fc2, layer_sizes[2], activation = tf.nn.relu)
-            self.odom_prediction = dense(fc3, layer_sizes[3], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
+            # fc2 = dense(fc1, layer_sizes[1], activation = tf.nn.relu, kernel_regularizer=regularizer)
+            # fc3 = dense(fc2, layer_sizes[2], activation = tf.nn.relu)
+            # self.odom_prediction = dense(fc3, layer_sizes[3], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
 
+            conv8 = slim.conv2d(conv7, 256, [2, 2], stride=1)
+            conv9 = slim.conv2d(conv8, 6, [1, 1], stride=1)
+
+            self.odom_prediction = tf.reduce_mean(conv9, [1, 2])    # should be [batch, 6]
  
     def build_vgg_init(self):
         #set convenience functions
