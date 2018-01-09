@@ -194,7 +194,6 @@ class MonodepthModel(object):
             conv5 = self.conv_block(conv4,            512, 3) # H/32
             conv6 = self.conv_block(conv5,            512, 3) # H/64
             conv7 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
-            # conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -243,7 +242,7 @@ class MonodepthModel(object):
         with tf.variable_scope('egomotion'):
             # regularizer = tf.contrib.layers.l2_regularizer(scale=0.000001)
 
-            regularizer = None
+            # regularizer = None
             # layer_sizes = [4000, 2000, 1000, 3]
             # fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
 
@@ -251,75 +250,19 @@ class MonodepthModel(object):
             # fc3 = dense(fc2, layer_sizes[2], activation = tf.nn.relu)
             # self.odom_prediction = dense(fc3, layer_sizes[3], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
 
-            conv8 = slim.conv2d(conv7, 256, [2, 2], stride=1)
-            conv9 = slim.conv2d(conv8, 6, [1, 1], stride=1)
+            # conv8 = slim.conv2d(conv7, 256, [2, 2], stride=1)
+            # conv9 = slim.conv2d(conv8, 6, [1, 1], stride=1)
 
-            self.odom_prediction = tf.reduce_mean(conv9, [1, 2])    # should be [batch, 6]
- 
-    def build_vgg_init(self):
-        #set convenience functions
-        conv = self.conv
-        if self.params.use_deconv:
-            upconv = self.deconv
-        else:
-            upconv = self.upconv
+            # self.odom_prediction = tf.reduce_mean(conv9, [1, 2])    # should be [batch, 6]
+            
+            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
 
-        with tf.variable_scope('encoder'):
-            a = np.random.normal(0.5, .2, size=(32, 7,7,3))
-            b = np.random.normal(-.5, .2, size=(32, 7,7,3))
-            c = np.concatenate((a, b), axis=3)  # (32, 7, 7, 6)
-            first_layer_initializer = tf.constant_initializer(1)
-            conv1 = self.conv_block(self.model_input,  32, 7, first_layer_initializer) # H/2
-            conv2 = self.conv_block(conv1,             64, 5) # H/4
-            conv3 = self.conv_block(conv2,            128, 3) # H/8
-            conv4 = self.conv_block(conv3,            256, 3) # H/16
-            conv5 = self.conv_block(conv4,            512, 3) # H/32
-            conv6 = self.conv_block(conv5,            512, 3) # H/64
-            conv7 = self.conv_block(conv6,            512, 3) # H/128
+            layer_sizes = [1000, 8]
+            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
+            self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu)  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
 
-        with tf.variable_scope('skips'):
-            skip1 = conv1
-            skip2 = conv2
-            skip3 = conv3
-            skip4 = conv4
-            skip5 = conv5
-            skip6 = conv6
-        
-        with tf.variable_scope('decoder'):
-            upconv7 = upconv(conv7,  512, 3, 2) #H/64
-            concat7 = tf.concat([upconv7, skip6], 3)
-            iconv7  = conv(concat7,  512, 3, 1)
 
-            upconv6 = upconv(iconv7, 512, 3, 2) #H/32
-            concat6 = tf.concat([upconv6, skip5], 3)
-            iconv6  = conv(concat6,  512, 3, 1)
 
-            upconv5 = upconv(iconv6, 256, 3, 2) #H/16
-            concat5 = tf.concat([upconv5, skip4], 3)
-            iconv5  = conv(concat5,  256, 3, 1)
-
-            upconv4 = upconv(iconv5, 128, 3, 2) #H/8
-            concat4 = tf.concat([upconv4, skip3], 3)
-            iconv4  = conv(concat4,  128, 3, 1)
-            self.disp4 = self.get_disp(iconv4)
-            udisp4  = self.upsample_nn(self.disp4, 2)
-
-            upconv3 = upconv(iconv4,  64, 3, 2) #H/4
-            concat3 = tf.concat([upconv3, skip2, udisp4], 3)
-            iconv3  = conv(concat3,   64, 3, 1)
-            self.disp3 = self.get_disp(iconv3)
-            udisp3  = self.upsample_nn(self.disp3, 2)
-
-            upconv2 = upconv(iconv3,  32, 3, 2) #H/2
-            concat2 = tf.concat([upconv2, skip1, udisp3], 3)
-            iconv2  = conv(concat2,   32, 3, 1)
-            self.disp2 = self.get_disp(iconv2)
-            udisp2  = self.upsample_nn(self.disp2, 2)
-
-            upconv1 = upconv(iconv2,  16, 3, 2) #H
-            concat1 = tf.concat([upconv1, udisp2], 3)
-            iconv1  = conv(concat1,   16, 3, 1)
-            self.disp1 = self.get_disp(iconv1)
 
     def build_vgg(self):
         #set convenience functions
@@ -455,8 +398,6 @@ class MonodepthModel(object):
                 #build model
                 if self.params.encoder == 'vgg':
                     self.build_vgg()
-                elif self.params.encoder == 'vgg_init':
-                    self.build_vgg_init()
                 elif self.params.encoder == 'vgg_odom':
                     self.build_vgg_odom()
                 elif self.params.encoder == 'resnet50':
@@ -520,9 +461,24 @@ class MonodepthModel(object):
             self.lr_loss = tf.add_n(self.lr_left_loss + self.lr_right_loss)
 
             # ODOM LOSS
-            self.odom = self.odom[:, :3]
+            vf = self.odom[:, 0]
+            vl = self.odom[:, 1]
+            angles = np.arctan2(vf, vl) * 180/np.pi
+            angles += (angles < 0)*360
+
+            speeds = vf**2 + vl**2
+
+            angle_bins = [45, 135, 225, 315]
+            binned_angles = np.digitize(angles, angle_bins) % len(angle_bins)
+            speed_bins = [0.9]
+            binned_speeds = np.digitize(speeds, speed_bins)
+
+            self.odom_labels = binned_angles + (binned_speeds + 1)*4
+            self.odom_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=odom_labels, logits=self.odom_prediction)
+
+
             # self.odom_loss = tf.reduce_mean((tf.to_float(self.odom) - self.odom_prediction)**2)
-            self.odom_loss = tf.losses.absolute_difference(labels=tf.to_float(self.odom), predictions=self.odom_prediction)
+            # self.odom_loss = tf.losses.absolute_difference(labels=tf.to_float(self.odom), predictions=self.odom_prediction)
             # self.total_loss = tf.reduce_mean(self.params.odom_loss_weight * self.odom_loss)
             
             # TOTAL LOSS
