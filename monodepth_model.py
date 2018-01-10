@@ -462,19 +462,27 @@ class MonodepthModel(object):
 
             # ODOM LOSS
             vf = self.odom[:, 0]
+            print vf
             vl = self.odom[:, 1]
-            angles = np.arctan2(vf, vl) * 180/np.pi
-            angles += (angles < 0)*360
-
+            angles = tf.atan2(vf, vl) * 180/np.pi
+            print "angles before add: ", angles
+            # batch_size = vf.get_shape().as_list()[0]
+            # negatives = tf.to_double(tf.where(angles < 0, tf.reshape([360.]*batch_size, (batch_size, -1)), tf.reshape([0.]*batch_size, (batch_size, -1))))
+            # print "negatives:", negatives
+            # angles += tf.reshape(negatives, (-1,))
+            angles = (angles + 360.)%360.
+            print "angles:", angles
             speeds = vf**2 + vl**2
+            
+            # this will  bin angles into 4 90 degree sectors
+            binned_angles = tf.to_int64((angles + 45)//90)%4
+            binned_speeds = tf.to_int64(speeds > 0.9)
 
-            angle_bins = [45, 135, 225, 315]
-            binned_angles = np.digitize(angles, angle_bins) % len(angle_bins)
-            speed_bins = [0.9]
-            binned_speeds = np.digitize(speeds, speed_bins)
-
-            self.odom_labels = binned_angles + (binned_speeds + 1)*4
-            self.odom_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=odom_labels, logits=self.odom_prediction)
+            self.odom_labels = binned_angles + binned_speeds*4
+            print "binned_angles:", binned_angles
+            print "binned_speeds:", binned_speeds
+            print "odom_labels:, ", self.odom_labels
+            self.odom_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.odom_labels, logits=self.odom_prediction))
 
 
             # self.odom_loss = tf.reduce_mean((tf.to_float(self.odom) - self.odom_prediction)**2)

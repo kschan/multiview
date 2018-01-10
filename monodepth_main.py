@@ -176,8 +176,7 @@ def train(params):
             before_op_time = time.time()
             # _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
 
-            _, loss_value, odom_labels = sess.run([apply_gradient_op, total_loss, model.odom_labels])
-            print "vf: ", oxts_splits[0][:, 0], "vl: ", oxts_splits[0][:, 1], "labels: ", odom_labels
+            _, loss_value = sess.run([apply_gradient_op, total_loss])
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
