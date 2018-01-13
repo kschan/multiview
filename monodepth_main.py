@@ -97,8 +97,10 @@ def train(params):
         print("total number of steps: {}".format(num_total_steps))
 
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
-        left  = dataloader.left_image_batch
-        right = dataloader.right_image_batch
+        # left  = dataloader.left_image_batch
+        # right = dataloader.right_image_batch
+        left  = tf.reshape(dataloader.left_image_batch, [None, 256, 512, 3*args.num_views])
+        right = tf.reshape(dataloader.right_image_batch [None, 256, 512, 3*args.num_views])
         oxts = dataloader.oxts_batch
 
         # split for each gpu
@@ -186,7 +188,7 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if step and step % 10000 == 0:
+            if step % steps_per_epoch == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
@@ -201,8 +203,8 @@ def test(params):
     # data_path, filenames_file, mode, num_views, model_name, output_directory, log_directory
 
     dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)
-    left  = dataloader.left_image_batch
-    right = dataloader.right_image_batch
+    left  = tf.reshape(dataloader.left_image_batch, [None, 256, 512, 3*args.num_views])
+    right = tf.reshape(dataloader.right_image_batch [None, 256, 512, 3*args.num_views])data
 
     model = MonodepthModel(params, args.mode, left, right)
 

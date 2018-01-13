@@ -11,7 +11,7 @@ parser.add_argument('--log_directory',             type=str,   help='directory t
 sess=tf.Session()
 #First let's load meta graph and restore weights
 
-saver = tf.train.import_meta_graph(parser.log_directory + parser.model_name + '.meta')
+saver = tf.train.import_meta_graph(parser.log_directory + parser.model_name + '.meta', clear_devices = True)
 saver.restore(sess,tf.train.latest_checkpoint(parser.log_directory))
 
 

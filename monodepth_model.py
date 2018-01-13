@@ -261,9 +261,6 @@ class MonodepthModel(object):
             fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
             self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu)  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
 
-
-
-
     def build_vgg(self):
         #set convenience functions
         conv = self.conv
