@@ -187,13 +187,24 @@ class MonodepthModel(object):
             upconv = self.upconv
 
         with tf.variable_scope('encoder'):
-            conv1 = self.conv_block(self.model_input,  32, 7) # H/2
-            conv2 = self.conv_block(conv1,             64, 5) # H/4
-            conv3 = self.conv_block(conv2,            128, 3) # H/8
-            conv4 = self.conv_block(conv3,            256, 3) # H/16
-            conv5 = self.conv_block(conv4,            512, 3) # H/32
-            conv6 = self.conv_block(conv5,            512, 3) # H/64
-            conv7 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+            conv1_1 = self.conv_block(self.model_input[:, :, :, :3],  32, 7) # H/2
+            conv2_1 = self.conv_block(conv1,             64, 5) # H/4
+            conv3_1 = self.conv_block(conv2,            128, 3) # H/8
+            conv4_1 = self.conv_block(conv3,            256, 3) # H/16
+            conv5_1 = self.conv_block(conv4,            512, 3) # H/32
+            conv6_1 = self.conv_block(conv5,            512, 3) # H/64
+            conv7_1 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+
+        with tf.variable_scope('encoder', reuse=True):
+            conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 7) # H/2
+            conv2_2 = self.conv_block(conv1,             64, 5) # H/4
+            conv3_2 = self.conv_block(conv2,            128, 3) # H/8
+            conv4_2 = self.conv_block(conv3,            256, 3) # H/16
+            conv5_2 = self.conv_block(conv4,            512, 3) # H/32
+            conv6_2 = self.conv_block(conv5,            512, 3) # H/64
+            conv7_2 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+
+        conv7 = tf.concat([conv7_1, conv7_2], 3)
 
         with tf.variable_scope('skips'):
             skip1 = conv1
@@ -259,7 +270,7 @@ class MonodepthModel(object):
 
             layer_sizes = [1000, 8]
             fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
-            self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu)  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
+            self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu, name='odom_prediction')  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
 
     def build_vgg(self):
         #set convenience functions
