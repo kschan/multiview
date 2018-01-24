@@ -188,31 +188,31 @@ class MonodepthModel(object):
 
         with tf.variable_scope('encoder'):
             conv1_1 = self.conv_block(self.model_input[:, :, :, :3],  32, 7) # H/2
-            conv2_1 = self.conv_block(conv1,             64, 5) # H/4
-            conv3_1 = self.conv_block(conv2,            128, 3) # H/8
-            conv4_1 = self.conv_block(conv3,            256, 3) # H/16
-            conv5_1 = self.conv_block(conv4,            512, 3) # H/32
-            conv6_1 = self.conv_block(conv5,            512, 3) # H/64
-            conv7_1 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+            conv2_1 = self.conv_block(conv1_1,             64, 5) # H/4
+            conv3_1 = self.conv_block(conv2_1,            128, 3) # H/8
+            conv4_1 = self.conv_block(conv3_1,            256, 3) # H/16
+            conv5_1 = self.conv_block(conv4_1,            512, 3) # H/32
+            conv6_1 = self.conv_block(conv5_1,            512, 3) # H/64
+            conv7_1 = self.conv_block(conv6_1,            512, 3) # H/128   [batch, 2, 4, 512]
 
         with tf.variable_scope('encoder', reuse=True):
             conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 7) # H/2
-            conv2_2 = self.conv_block(conv1,             64, 5) # H/4
-            conv3_2 = self.conv_block(conv2,            128, 3) # H/8
-            conv4_2 = self.conv_block(conv3,            256, 3) # H/16
-            conv5_2 = self.conv_block(conv4,            512, 3) # H/32
-            conv6_2 = self.conv_block(conv5,            512, 3) # H/64
-            conv7_2 = self.conv_block(conv6,            512, 3) # H/128   [batch, 2, 4, 512]
+            conv2_2 = self.conv_block(conv1_2,             64, 5) # H/4
+            conv3_2 = self.conv_block(conv2_2,            128, 3) # H/8
+            conv4_2 = self.conv_block(conv3_2,            256, 3) # H/16
+            conv5_2 = self.conv_block(conv4_2,            512, 3) # H/32
+            conv6_2 = self.conv_block(conv5_2,            512, 3) # H/64
+            conv7_2 = self.conv_block(conv6_2,            512, 3) # H/128   [batch, 2, 4, 512]
 
         conv7 = tf.concat([conv7_1, conv7_2], 3)
 
         with tf.variable_scope('skips'):
-            skip1 = conv1
-            skip2 = conv2
-            skip3 = conv3
-            skip4 = conv4
-            skip5 = conv5
-            skip6 = conv6
+            skip1 = conv1_1
+            skip2 = conv2_1
+            skip3 = conv3_1
+            skip4 = conv4_1
+            skip5 = conv5_1
+            skip6 = conv6_1
         
         with tf.variable_scope('decoder'):
             upconv7 = upconv(conv7,  512, 3, 2) #H/64
@@ -249,7 +249,7 @@ class MonodepthModel(object):
             concat1 = tf.concat([upconv1, udisp2], 3)
             iconv1  = conv(concat1,   16, 3, 1)
             self.disp1 = self.get_disp(iconv1)
-
+            
         with tf.variable_scope('egomotion'):
             # regularizer = tf.contrib.layers.l2_regularizer(scale=0.000001)
 
@@ -268,7 +268,7 @@ class MonodepthModel(object):
             
             conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
 
-            layer_sizes = [1000, 8]
+            layer_sizes = [1000, 4]
             fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
             self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu, name='odom_prediction')  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
 
@@ -486,7 +486,7 @@ class MonodepthModel(object):
             binned_angles = tf.to_int64((angles + 45)//90)%4
             binned_speeds = tf.to_int64(speeds > 0.9)
 
-            self.odom_labels = binned_angles + binned_speeds*4
+            self.odom_labels = binned_angles
             print "binned_angles:", binned_angles
             print "binned_speeds:", binned_speeds
             print "odom_labels:, ", self.odom_labels

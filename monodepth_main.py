@@ -97,10 +97,8 @@ def train(params):
         print("total number of steps: {}".format(num_total_steps))
 
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
-        # left  = dataloader.left_image_batch
-        # right = dataloader.right_image_batch
-        left  = tf.reshape(dataloader.left_image_batch, [None, 256, 512, 3*args.num_views])
-        right = tf.reshape(dataloader.right_image_batch [None, 256, 512, 3*args.num_views])
+        left  = dataloader.left_image_batch
+        right = dataloader.right_image_batch
         oxts = dataloader.oxts_batch
 
         # split for each gpu
