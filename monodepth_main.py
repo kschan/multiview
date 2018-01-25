@@ -21,9 +21,9 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from monodepth_model import *
 from monodepth_dataloader import *
-# from monodepth_dataloader_tfrecord import *
 from average_gradients import *
 from tensorflow.python.client import timeline
+import subprocess
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
 
@@ -54,6 +54,7 @@ parser.add_argument('--full_summary',                          help='if set, wil
 
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=0.1)
+parser.add_argument('validation_filenames_file'     type = str, required=True)
 
 args = parser.parse_args()
 
@@ -186,8 +187,12 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if steps_per_epoch == 0:
+            if step%steps_per_epoch == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
+                evaluate_command = 'python utils/evaluate_odom.py --data_path ' + args.data_path + ' --filenames_file ' +
+                        args.validation_filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
+                print evaluate_command
+                pipe = subprocess.Popen(evaluate_command, shell=True, stdout=PIPE).stdout
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
 
