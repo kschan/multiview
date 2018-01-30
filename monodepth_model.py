@@ -205,7 +205,8 @@ class MonodepthModel(object):
             conv7_2 = self.conv_block(conv6_2,            512, 3) # H/128   [batch, 2, 4, 512]
 
         conv7 = tf.concat([conv7_1, conv7_2], 3)
-
+        print "conv7: ", conv7
+        '''
         with tf.variable_scope('skips'):
             skip1 = conv1_1
             skip2 = conv2_1
@@ -249,28 +250,16 @@ class MonodepthModel(object):
             concat1 = tf.concat([upconv1, udisp2], 3)
             iconv1  = conv(concat1,   16, 3, 1)
             self.disp1 = self.get_disp(iconv1)
-            
+        '''
+    
         with tf.variable_scope('egomotion'):
-            # regularizer = tf.contrib.layers.l2_regularizer(scale=0.000001)
-
-            # regularizer = None
-            # layer_sizes = [4000, 2000, 1000, 3]
-            # fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu, kernel_regularizer=regularizer)
-
-            # fc2 = dense(fc1, layer_sizes[1], activation = tf.nn.relu, kernel_regularizer=regularizer)
-            # fc3 = dense(fc2, layer_sizes[2], activation = tf.nn.relu)
-            # self.odom_prediction = dense(fc3, layer_sizes[3], activation = None, kernel_regularizer=regularizer) # last layer output has linear activation
-
-            # conv8 = slim.conv2d(conv7, 256, [2, 2], stride=1)
-            # conv9 = slim.conv2d(conv8, 6, [1, 1], stride=1)
-
-            # self.odom_prediction = tf.reduce_mean(conv9, [1, 2])    # should be [batch, 6]
-            
-            conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
-
-            layer_sizes = [1000, 4]
-            fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
-            self.odom_prediction = dense(fc1, layer_sizes[1], activation = tf.nn.relu, name='odom_prediction')  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
+#             conv7_flat = tf.contrib.layers.flatten(inputs=conv7)              # this will be [batch, 4096]
+            conv8 = slim.conv2d(conv7, 256, [2, 2], stride=1)
+            conv8_flat = tf.contrib.layers.flatten(inputs=conv8)
+            layer_sizes = [1000, 2]
+            # fc1 = dense(conv7_flat, layer_sizes[0], activation = tf.nn.relu)
+            # fc2 = dense(fc1, layer_sizes[1], activation = tf.nn.relu)
+            self.odom_prediction = dense(conv8_flat, layer_sizes[1], name='odom_prediction')  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
 
     def build_vgg(self):
         #set convenience functions
@@ -415,6 +404,7 @@ class MonodepthModel(object):
 
     def build_outputs(self):
         # STORE DISPARITIES
+        '''
         with tf.variable_scope('disparities'):
             self.disp_est  = [self.disp1, self.disp2, self.disp3, self.disp4]
             self.disp_left_est  = [tf.expand_dims(d[:,:,:,0], 3) for d in self.disp_est]
@@ -437,11 +427,12 @@ class MonodepthModel(object):
         with tf.variable_scope('smoothness'):
             self.disp_left_smoothness  = self.get_disparity_smoothness(self.disp_left_est,  self.left_pyramid)
             self.disp_right_smoothness = self.get_disparity_smoothness(self.disp_right_est, self.right_pyramid)
-
+'''
     def build_losses(self):
         with tf.variable_scope('losses', reuse=self.reuse_variables):
             # IMAGE RECONSTRUCTION
             # L1
+            '''
             self.l1_left = [tf.abs( self.left_est[i] - self.left_pyramid[i]) for i in range(4)]
             self.l1_reconstruction_loss_left  = [tf.reduce_mean(l) for l in self.l1_left]
             self.l1_right = [tf.abs(self.right_est[i] - self.right_pyramid[i]) for i in range(4)]
@@ -467,23 +458,20 @@ class MonodepthModel(object):
             self.lr_left_loss  = [tf.reduce_mean(tf.abs(self.right_to_left_disp[i] - self.disp_left_est[i]))  for i in range(4)]
             self.lr_right_loss = [tf.reduce_mean(tf.abs(self.left_to_right_disp[i] - self.disp_right_est[i])) for i in range(4)]
             self.lr_loss = tf.add_n(self.lr_left_loss + self.lr_right_loss)
-
+            '''
             # ODOM LOSS
             vf = self.odom[:, 0]
             print vf
             vl = self.odom[:, 1]
             angles = tf.atan2(vf, vl) * 180/np.pi
             print "angles before add: ", angles
-            # batch_size = vf.get_shape().as_list()[0]
-            # negatives = tf.to_double(tf.where(angles < 0, tf.reshape([360.]*batch_size, (batch_size, -1)), tf.reshape([0.]*batch_size, (batch_size, -1))))
-            # print "negatives:", negatives
-            # angles += tf.reshape(negatives, (-1,))
             angles = (angles + 360.)%360.
             print "angles:", angles
             speeds = vf**2 + vl**2
             
             # this will  bin angles into 4 90 degree sectors
-            binned_angles = tf.to_int64((angles + 45)//90)%4
+            # binned_angles = tf.to_int64((angles + 45)//90)%4
+            binned_angles = tf.to_int64(angles > 180)
             binned_speeds = tf.to_int64(speeds > 0.9)
 
             self.odom_labels = binned_angles
@@ -498,14 +486,14 @@ class MonodepthModel(object):
             # self.total_loss = tf.reduce_mean(self.params.odom_loss_weight * self.odom_loss)
             
             # TOTAL LOSS
-            self.total_loss = (self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss)*0.0 + self.params.odom_loss_weight * self.odom_loss
-
+            # self.total_loss = (self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss)*0.0 + self.params.odom_loss_weight * self.odom_loss
+            self.total_loss = self.params.odom_loss_weight * self.odom_loss
     def build_summaries(self):
         # SUMMARIES
         with tf.device('/cpu:0'):
             if self.params.encoder == 'vgg_odom':
                 tf.summary.scalar('odom_loss', self.odom_loss, collections=self.model_collection)
-            for i in range(4):
+            '''for i in range(4):
                 tf.summary.scalar('ssim_loss_' + str(i), self.ssim_loss_left[i] + self.ssim_loss_right[i], collections=self.model_collection)
                 tf.summary.scalar('l1_loss_' + str(i), self.l1_reconstruction_loss_left[i] + self.l1_reconstruction_loss_right[i], collections=self.model_collection)
                 tf.summary.scalar('image_loss_' + str(i), self.image_loss_left[i] + self.image_loss_right[i], collections=self.model_collection)
@@ -525,4 +513,4 @@ class MonodepthModel(object):
             if self.params.full_summary:
                 tf.summary.image('left',  self.left,   max_outputs=4, collections=self.model_collection)
                 tf.summary.image('right', self.right,  max_outputs=4, collections=self.model_collection)
-
+'''

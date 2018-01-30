@@ -30,7 +30,11 @@ def image_path_to_odom_path(image_path):
     return odom_file
 
 def main():
-    sess=tf.Session()
+    pass
+    config = tf.ConfigProto(
+        device_count = {'GPU': 0}
+    )
+    sess=tf.Session(config=config)
     #First let's load meta graph and restore weights
 
     saver = tf.train.import_meta_graph(tf.train.latest_checkpoint(args.log_directory) + '.meta', clear_devices = True)
@@ -39,7 +43,7 @@ def main():
     graph = tf.get_default_graph()
 
     model_input = graph.get_tensor_by_name('shuffle_batch:0') # <tf.Tensor 'shuffle_batch:0' shape=(8, 256, 512, 6) dtype=float32>
-    odom_logits = [graph.get_tensor_by_name(x + '/egomotion/dense_2/Relu:0') for x in ['model', 'model_1', 'model_2', 'model_3']]
+    odom_logits = [graph.get_tensor_by_name(x + '/egomotion/odom_prediction/Relu:0') for x in ['model', 'model_1', 'model_2', 'model_3']]
     odom_prediction = tf.nn.softmax(tf.concat(odom_logits, 0))
     # odom_prediction = tf.concat(odom_logits, 0)
 
@@ -77,16 +81,16 @@ def main():
             outputs = sess.run(odom_prediction, feed_dict={model_input:inputs}) # I expect shape [8, 8]
             output_classes = np.argmax(outputs, axis = 1)
             output_classes_only_turn = output_classes % 4
-
-            num_correct += sum(outputs == output_classes)
-            num_correct_only_turn += sum(output_classes_only_turn == output_classes_only_turn)
+            print output_classes
+            num_correct += np.sum(odom_labels == output_classes)
+            num_correct_only_turn += np.sum(odom_labels_only_turn == output_classes_only_turn)
             total += len(output_classes)
                    
     sess.close()
 
-    with open('validation_accuracies.txt') as output:
-        step = tf.train.latest_checkpoint(log_directory).split('-')[-1]
-        output.write('%d, %f, %f\n' % (step, num_correct/float(total), num_correct_only_turn/float(total)))
+    with open(args.log_directory + '/validation_accuracies.txt', 'w') as output:
+        step = tf.train.latest_checkpoint(args.log_directory).split('-')[-1]
+        output.write('%s, %f, %f\n' % (step, num_correct/float(total), num_correct_only_turn/float(total)))
 
 if __name__ == '__main__':
     main()

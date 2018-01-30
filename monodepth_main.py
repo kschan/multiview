@@ -54,8 +54,8 @@ parser.add_argument('--full_summary',                          help='if set, wil
 
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=0.1)
-parser.add_argument('validation_filenames_file'     type = str, required=True)
 
+parser.add_argument('--validation_filenames_file',           type=str, required=True)
 args = parser.parse_args()
 
 def post_process_disparity(disp):
@@ -189,10 +189,10 @@ def train(params):
                 summary_writer.add_summary(summary_str, global_step=step)
             if step%steps_per_epoch == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
-                evaluate_command = 'python utils/evaluate_odom.py --data_path ' + args.data_path + ' --filenames_file ' +
+                evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --filenames_file ' + \
                         args.validation_filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
                 print evaluate_command
-                pipe = subprocess.Popen(evaluate_command, shell=True, stdout=PIPE).stdout
+                pipe = subprocess.Popen(evaluate_command, shell=True, stdout=subprocess.PIPE).stdout
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
 
