@@ -53,7 +53,7 @@ parser.add_argument('--retrain',                               help='if used wit
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
 
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
-parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=0.1)
+parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=1.0)
 
 parser.add_argument('--validation_filenames_file',           type=str, required=True)
 args = parser.parse_args()
@@ -113,8 +113,7 @@ def train(params):
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
-
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i, is_training=True)
                    
                     loss = model.total_loss
                     tower_losses.append(loss)
@@ -125,9 +124,16 @@ def train(params):
 
                     tower_grads.append(grads)
 
-        grads = average_gradients(tower_grads)
+        gradients, variables = zip(*average_gradients(tower_grads))
+        gradients, _ = tf.clip_by_global_norm(gradients, 1E5)
+        grads = zip(gradients, variables)
 
-        apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
+        for grad in grads:
+            tf.summary.histogram(grad[1].name+'_grad', grad[0], ['model_0'])
+        
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
 
         total_loss = tf.reduce_mean(tower_losses)
 
@@ -177,7 +183,8 @@ def train(params):
             before_op_time = time.time()
             # _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
 
-            _, loss_value = sess.run([apply_gradient_op, total_loss])
+            _, loss_value, labels = sess.run([apply_gradient_op, total_loss, model.odom_labels])
+            
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
@@ -187,10 +194,10 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if step%steps_per_epoch == 0:
+            if step and step%500 == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
-                evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --filenames_file ' + \
-                        args.validation_filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
+                evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --validation_file ' + \
+                        args.validation_filenames_file + ' --training_file ' + args.filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
                 print evaluate_command
                 pipe = subprocess.Popen(evaluate_command, shell=True, stdout=subprocess.PIPE).stdout
 
