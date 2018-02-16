@@ -42,6 +42,7 @@ class MonodepthDataloader(object):
         # else:
 
         if num_views == 1:
+            # image_03 is right image
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
             right_image_path = tf.string_join([self.data_path, split_line[2]])
             left_image_o  = self.read_image(left_image_path)
@@ -80,21 +81,21 @@ class MonodepthDataloader(object):
             # randomly change order of images
             if num_views != 1:
                 change_order = tf.random_uniform([], 0, 1)  # if this is > 0.5, swap the images so the second image is first 3 layers
-                right_image_o = tf.cond(change_order > 0.5,
+                right_image_o = tf.cond(change_order > 1.0,
                                     lambda: tf.concat([right_image_o_2, right_image_o_1], axis = 2),
                                     lambda: tf.concat([right_image_o_1, right_image_o_2], axis = 2)
                                 )
-                left_image_o = tf.cond(change_order > 0.5,
+                left_image_o = tf.cond(change_order > 1.0,
                                     lambda: tf.concat([left_image_o_2, left_image_o_1], axis = 2),
                                     lambda: tf.concat([left_image_o_1, left_image_o_2], axis = 2)
                                 )
-                
+             
                 # TODO: This is a bit dodgy because if we flip the order of the images, we are using the odometry informatinon for the (now) second image
                 oxts = tf.cond(change_order > 0.5, lambda: -oxts_o, lambda: oxts_o) 
 
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
-            threshold = 0.5
+            threshold = 1.0
             left_image  = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
             right_image = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
             # If we flip the images left to right, we need to negate horizontal velocity and rotation
@@ -104,7 +105,6 @@ class MonodepthDataloader(object):
                 oxts = 0
             # randomly augment images
             do_augment  = tf.random_uniform([], 0, 1)
-            do_augment = tf.constant(1.)
             left_image, right_image = tf.cond(do_augment > 0.5, lambda: self.augment_image_pair(left_image, right_image), lambda: (left_image, right_image))
 
             left_image.set_shape( [None, None, 3 * num_views])

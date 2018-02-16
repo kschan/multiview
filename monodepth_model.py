@@ -56,7 +56,11 @@ class MonodepthModel(object):
 
         self.build_losses()
         self.build_summaries()     
-
+        
+        print "left: ", left
+        print "right: ", right
+        print "left pyramid: ", self.left_pyramid
+        print "right_pyramid: ", self.right_pyramid
     def gradient_x(self, img):
         gx = img[:,:,:-1,:] - img[:,:,1:,:]
         return gx
@@ -72,7 +76,7 @@ class MonodepthModel(object):
         return tf.image.resize_nearest_neighbor(x, [h * ratio, w * ratio])
 
     def scale_pyramid(self, img, num_scales):
-        scaled_imgs = [img]
+        scaled_imgs = [img[:,:,:,:3]]
         s = tf.shape(img)
         h = s[1]
         w = s[2]
@@ -190,7 +194,7 @@ class MonodepthModel(object):
             upconv = self.upconv
 
         with tf.variable_scope('encoder') as scope:
-            conv1_1 = self.conv_block(self.model_input[:, :, :, :3],  32, 5, name='conv1') # H/2
+            conv1_1 = self.conv_block(self.model_input[:, :, :, :3],  32, 7, name='conv1') # H/2
             
             conv2_1 = self.conv_block(conv1_1,             64, 5, name='conv2') # H/4
             conv3_1 = self.conv_block(conv2_1,            128, 3, name='conv3') # H/8
@@ -200,7 +204,7 @@ class MonodepthModel(object):
             conv7_1 = self.conv_block(conv6_1,            512, 3, name='conv7') # H/128   [batch, 2, 4, 512]
             # tf.get_variable_scope().reuse_variables()
             # assert tf.get_variable_scope().reuse==True
-            '''conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 5, name='conv1', reuse=True) # H/2
+            '''conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 7, name='conv1', reuse=True) # H/2
             conv2_2 = self.conv_block(conv1_2,             64, 5, name='conv2', reuse=True) # H/4
             conv3_2 = self.conv_block(conv2_2,            128, 3, name='conv3', reuse=True) # H/8
             conv4_2 = self.conv_block(conv3_2,            256, 3, name='conv4', reuse=True) # H/16
@@ -281,7 +285,7 @@ class MonodepthModel(object):
             upconv = self.upconv
 
         with tf.variable_scope('encoder'):
-            conv1 = self.conv_block(self.model_input,  32, 7) # H/2
+            conv1 = self.conv_block(self.model_input[:,:,:,:3],  32, 7) # H/2
             conv2 = self.conv_block(conv1,             64, 5) # H/4
             conv3 = self.conv_block(conv2,            128, 3) # H/8
             conv4 = self.conv_block(conv3,            256, 3) # H/16
@@ -448,7 +452,9 @@ class MonodepthModel(object):
             self.l1_reconstruction_loss_left  = [tf.reduce_mean(l) for l in self.l1_left]
             self.l1_right = [tf.abs(self.right_est[i] - self.right_pyramid[i]) for i in range(4)]
             self.l1_reconstruction_loss_right = [tf.reduce_mean(l) for l in self.l1_right]
-
+            
+            print "l1_left: ", self.l1_left
+            print "l1_right: ", self.l1_right
             # SSIM
             self.ssim_left = [self.SSIM( self.left_est[i],  self.left_pyramid[i]) for i in range(4)]
             self.ssim_loss_left  = [tf.reduce_mean(s) for s in self.ssim_left]
@@ -505,9 +511,13 @@ class MonodepthModel(object):
     def build_summaries(self):
         # SUMMARIES
         with tf.device('/cpu:0'):  
-            # tf.summary.histogram(self.model_input.name, self.model_input, collections=self.model_collection)
+            tf.summary.histogram(self.model_input.name, self.model_input, collections=self.model_collection)
+            #tf.summary.image('self.left', tf.concat([self.left[:,:,:,:3], self.left[:,:,:,3:]], axis=1), collections=self.model_collection)
+            #tf.summary.image('self.right', tf.concat([self.right[:,:,:,:3], self.right[:,:,:,3:]], axis=1), collections=self.model_collection)
+            tf.summary.image('self.right', self.right, collections=self.model_collection)
+            tf.summary.image('self.left', self.left, collections=self.model_collection)
             for var in tf.trainable_variables():
-                print var
+                #print var
                 tf.summary.histogram(var.name, var, collections=self.model_collection)
             if self.params.encoder == 'vgg_odom':
                 tf.summary.scalar('odom_loss', self.odom_loss, collections=self.model_collection)
