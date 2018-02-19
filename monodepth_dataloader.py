@@ -39,7 +39,7 @@ class MonodepthDataloader(object):
             left_image_o  = self.read_image(left_image_path)
         else:
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
-            right_image_path = tf.string_join([self.data_path, split_line[1]])
+            right_image_path = tf.string_join([self.data_path, split_line[2]])
             left_image_o  = self.read_image(left_image_path)
             right_image_o = self.read_image(right_image_path)
 
