@@ -76,7 +76,7 @@ class MonodepthModel(object):
         return tf.image.resize_nearest_neighbor(x, [h * ratio, w * ratio])
 
     def scale_pyramid(self, img, num_scales):
-        scaled_imgs = [img[:,:,:,:3]]
+        scaled_imgs = [img]
         s = tf.shape(img)
         h = s[1]
         w = s[2]
@@ -86,7 +86,7 @@ class MonodepthModel(object):
             nw = w / ratio
             scaled = tf.image.resize_area(img, [nh, nw])
             # need to keep only the first 3 channels corresponding to the first image
-            scaled_imgs.append(scaled[:,:,:,:3])
+            scaled_imgs.append(scaled)
         return scaled_imgs
 
     def generate_image_left(self, img, disp):
@@ -144,9 +144,9 @@ class MonodepthModel(object):
 
     def conv_block(self, x, num_out_layers, kernel_size, initializer=None, name=None, reuse=None):
         conv1 = self.conv(x,     num_out_layers, kernel_size, 1, initializer=initializer, name=name+'_1' if name else None, reuse=reuse)
-        conv1 = tf.contrib.layers.batch_norm(conv1, center=False, scale=False, is_training=self.is_training, reuse=reuse, scope=name+'/conv_1_bn' if name else None)
+        #conv1 = tf.contrib.layers.batch_norm(conv1, center=False, scale=False, is_training=self.is_training, reuse=reuse, scope=name+'/conv_1_bn' if name else None)
         conv2 = self.conv(conv1, num_out_layers, kernel_size, 2, initializer=initializer, name=name+'_2' if name else None, reuse=reuse)   
-        conv2 = tf.contrib.layers.batch_norm(conv2, center=False, scale=False, is_training=self.is_training, reuse=reuse, scope=name+'/conv_2_bn' if name else None)
+        #conv2 = tf.contrib.layers.batch_norm(conv2, center=False, scale=False, is_training=self.is_training, reuse=reuse, scope=name+'/conv_2_bn' if name else None)
         tf.summary.histogram(conv2.name, conv2, collections=self.model_collection)
         return conv2
 
@@ -269,7 +269,8 @@ class MonodepthModel(object):
             tf.summary.histogram('disp4', self.disp4, collections=self.model_collection)
 
         with tf.variable_scope('egomotion'): 
-            conv7 = tf.concat([conv7_1], axis=3)
+            #conv7 = tf.concat([conv7_1], axis=3)
+            conv7 = conv7_1
             print "conv7: ", conv7
             conv8 = tf.layers.conv2d(conv7, 64, 2, activation=tf.nn.leaky_relu)
             # tf.summary.histogram(conv8.name, conv8, collections=self.model_collection)
@@ -398,9 +399,9 @@ class MonodepthModel(object):
             print self.reuse_variables
             with tf.variable_scope('model', reuse=self.reuse_variables):
 
-                self.left_pyramid  = self.scale_pyramid(self.left,  4)
+                self.left_pyramid  = self.scale_pyramid(self.left[:,:,:,:3],  4)
                 if self.mode == 'train':
-                    self.right_pyramid = self.scale_pyramid(self.right, 4)
+                    self.right_pyramid = self.scale_pyramid(self.right[:,:,:,:3], 4)
 
                 if self.params.do_stereo:
                     self.model_input = tf.concat([self.left, self.right], 3)

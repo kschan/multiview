@@ -81,17 +81,18 @@ class MonodepthDataloader(object):
             # randomly change order of images
             if num_views != 1:
                 change_order = tf.random_uniform([], 0, 1)  # if this is > 0.5, swap the images so the second image is first 3 layers
-                right_image_o = tf.cond(change_order > 1.0,
+                change_order_threshold = 1.0
+                right_image_o = tf.cond(change_order > change_order_threshold,
                                     lambda: tf.concat([right_image_o_2, right_image_o_1], axis = 2),
                                     lambda: tf.concat([right_image_o_1, right_image_o_2], axis = 2)
                                 )
-                left_image_o = tf.cond(change_order > 1.0,
+                left_image_o = tf.cond(change_order > change_order_threshold,
                                     lambda: tf.concat([left_image_o_2, left_image_o_1], axis = 2),
                                     lambda: tf.concat([left_image_o_1, left_image_o_2], axis = 2)
                                 )
              
                 # TODO: This is a bit dodgy because if we flip the order of the images, we are using the odometry informatinon for the (now) second image
-                oxts = tf.cond(change_order > 0.5, lambda: -oxts_o, lambda: oxts_o) 
+                oxts = tf.cond(change_order > change_order_threshold, lambda: -oxts_o, lambda: oxts_o) 
 
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
