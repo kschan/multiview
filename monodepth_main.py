@@ -194,12 +194,12 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if step and step%500 == 0:
+            if step and step%10000 == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
                 evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --validation_file ' + \
                         args.validation_filenames_file + ' --training_file ' + args.filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
-                print evaluate_command
-                pipe = subprocess.Popen(evaluate_command, shell=True, stdout=subprocess.PIPE).stdout
+                #print evaluate_command
+                #pipe = subprocess.Popen(evaluate_command, shell=True, stdout=subprocess.PIPE).stdout
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
 

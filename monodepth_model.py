@@ -135,7 +135,7 @@ class MonodepthModel(object):
         disp = 0.3 * self.conv(x, 2, 3, 1, tf.nn.sigmoid)
         return disp
 
-    def conv(self, x, num_out_layers, kernel_size, stride, activation_fn=tf.nn.leaky_relu, name=None, reuse=None, initializer=None):
+    def conv(self, x, num_out_layers, kernel_size, stride, activation_fn=tf.nn.elu, name=None, reuse=None, initializer=None):
         #p = np.floor((kernel_size - 1) / 2).astype(np.int32)
         #p_x = tf.pad(x, [[0, 0], [p, p], [p, p], [0, 0]])
         out = tf.layers.conv2d(x, num_out_layers, kernel_size, stride, padding='same', activation=activation_fn, name=name, reuse=reuse)
@@ -204,24 +204,24 @@ class MonodepthModel(object):
             conv7_1 = self.conv_block(conv6_1,            512, 3, name='conv7') # H/128   [batch, 2, 4, 512]
             # tf.get_variable_scope().reuse_variables()
             # assert tf.get_variable_scope().reuse==True
-            '''conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 7, name='conv1', reuse=True) # H/2
+            conv1_2 = self.conv_block(self.model_input[:, :, :, 3:],  32, 7, name='conv1', reuse=True) # H/2
             conv2_2 = self.conv_block(conv1_2,             64, 5, name='conv2', reuse=True) # H/4
             conv3_2 = self.conv_block(conv2_2,            128, 3, name='conv3', reuse=True) # H/8
             conv4_2 = self.conv_block(conv3_2,            256, 3, name='conv4', reuse=True) # H/16
             conv5_2 = self.conv_block(conv4_2,            512, 3, name='conv5', reuse=True) # H/32
             conv6_2 = self.conv_block(conv5_2,            512, 3, name='conv6', reuse=True) # H/64
             conv7_2 = self.conv_block(conv6_2,            512, 3, name='conv7', reuse=True) # H/128   [batch, 2, 4, 512]
-       ''' 
+
         with tf.variable_scope('skips'):
-            skip1 = conv1_1 #- conv1_2
-            skip2 = conv2_1 #- conv2_2
-            skip3 = conv3_1 #- conv3_2
-            skip4 = conv4_1 #- conv4_2
-            skip5 = conv5_1 #- conv5_2
-            skip6 = conv6_1 #- conv6_2
+            skip1 = conv1_1 - conv1_2
+            skip2 = conv2_1 - conv2_2
+            skip3 = conv3_1 - conv3_2
+            skip4 = conv4_1 - conv4_2
+            skip5 = conv5_1 - conv5_2
+            skip6 = conv6_1 - conv6_2
         
         with tf.variable_scope('decoder'):
-            conv7_diff = conv7_1 #- conv7_2
+            conv7_diff = conv7_1 - conv7_2
             tf.summary.histogram('conv7_diff', conv7_diff, collections=self.model_collection)
             upconv7 = upconv(conv7_diff,  512, 3, 2, name='upconv7') #H/64
             concat7 = tf.concat([upconv7, skip6], 3)
@@ -513,10 +513,10 @@ class MonodepthModel(object):
         # SUMMARIES
         with tf.device('/cpu:0'):  
             tf.summary.histogram(self.model_input.name, self.model_input, collections=self.model_collection)
-            #tf.summary.image('self.left', tf.concat([self.left[:,:,:,:3], self.left[:,:,:,3:]], axis=1), collections=self.model_collection)
-            #tf.summary.image('self.right', tf.concat([self.right[:,:,:,:3], self.right[:,:,:,3:]], axis=1), collections=self.model_collection)
-            tf.summary.image('self.right', self.right, collections=self.model_collection)
-            tf.summary.image('self.left', self.left, collections=self.model_collection)
+            tf.summary.image('self.left', tf.concat([self.left[:,:,:,:3], self.left[:,:,:,3:]], axis=1), collections=self.model_collection)
+            tf.summary.image('self.right', tf.concat([self.right[:,:,:,:3], self.right[:,:,:,3:]], axis=1), collections=self.model_collection)
+            #tf.summary.image('self.right', self.right, collections=self.model_collection)
+            #tf.summary.image('self.left', self.left, collections=self.model_collection)
             for var in tf.trainable_variables():
                 #print var
                 tf.summary.histogram(var.name, var, collections=self.model_collection)
