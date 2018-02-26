@@ -126,8 +126,9 @@ class MonodepthDataloader(object):
             left_image_o = tf.concat([left_image_o_1, left_image_o_2], axis = 2)
             left_image = tf.stack([left_image_o,  tf.image.flip_left_right(left_image_o)],  0)
             left_image.set_shape( [2, None, None, 6])
-            
             self.left_image_batch = left_image
+
+            self.oxts_batch = oxts_o
 
     def augment_image_pair(self, left_image, right_image):
         left_image_aug = left_image

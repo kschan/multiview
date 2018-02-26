@@ -45,7 +45,6 @@ class MonodepthModel(object):
         self.right = right
         self.odom = odom
         self.model_collection = ['model_' + str(model_index)]
-        self.is_training = is_training
         self.reuse_variables = reuse_variables
 
         self.build_model()
@@ -283,28 +282,28 @@ class MonodepthModel(object):
 
         self.build_monodepth_loss()
 
-            '''
-            # ODOM LOSS
-            vf = self.odom[:, 0]
-            print vf
-            vl = self.odom[:, 1]
-            angles = tf.atan2(vf, vl) * 180/np.pi
-            print "angles before add: ", angles
-            angles = (angles + 360.)%360.
-            print "angles:", angles
-            speeds = vf**2 + vl**2
-            
-            # this will  bin angles into 4 90 degree sectors
-            # binned_angles = tf.to_int64((angles + 45)//90)%4
-            binned_angles = tf.to_int64(angles > 180)
-            binned_speeds = tf.to_int64(speeds > 0.9)
+        '''
+        # ODOM LOSS
+        vf = self.odom[:, 0]
+        print vf
+        vl = self.odom[:, 1]
+        angles = tf.atan2(vf, vl) * 180/np.pi
+        print "angles before add: ", angles
+        angles = (angles + 360.)%360.
+        print "angles:", angles
+        speeds = vf**2 + vl**2
+        
+        # this will  bin angles into 4 90 degree sectors
+        # binned_angles = tf.to_int64((angles + 45)//90)%4
+        binned_angles = tf.to_int64(angles > 180)
+        binned_speeds = tf.to_int64(speeds > 0.9)
 
-            self.odom_labels = binned_angles
-            print "binned_angles:", binned_angles
-            print "binned_speeds:", binned_speeds
-            print "odom_labels:, ", self.odom_labels
-            self.odom_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.odom_labels, logits=self.odom_prediction))
-            '''
+        self.odom_labels = binned_angles
+        print "binned_angles:", binned_angles
+        print "binned_speeds:", binned_speeds
+        print "odom_labels:, ", self.odom_labels
+        self.odom_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.odom_labels, logits=self.odom_prediction))
+        '''
 
     def build_vgg(self):
         #set convenience functions
