@@ -52,8 +52,6 @@ parser.add_argument('--log_directory',             type=str,   help='directory t
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a specific checkpoint to load', default='')
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
-
-parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=1.0)
 
 parser.add_argument('--validation_filenames_file',           type=str, default='')
@@ -98,7 +96,7 @@ def train(params):
         print("total number of samples: {}".format(num_training_samples))
         print("total number of steps: {}".format(num_total_steps))
 
-        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
+        dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
         oxts = dataloader.oxts_batch
@@ -114,7 +112,7 @@ def train(params):
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i, is_training=True)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i)
                    
                     loss = model.total_loss
                     tower_losses.append(loss)
@@ -185,7 +183,7 @@ def train(params):
             before_op_time = time.time()
             # _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
 
-            _, loss_value, labels = sess.run([apply_gradient_op, total_loss, model.odom_labels])
+            _, loss_value = sess.run([apply_gradient_op, total_loss])
             
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
@@ -212,49 +210,45 @@ def train(params):
             
 def test(params):
     """Test function."""
-    # RESTORE
-    if args.checkpoint_path == '':
-        # print args.log_directory + '/' + args.model_name
-        restore_path = tf.train.latest_checkpoint(args.log_directory + '/' + args.model_name)
-    else:
-        restore_path = args.checkpoint_path.split(".")[0]
-    
-    print "RESTORE PATH", restore_path
-    sess = tf.Session()
-    train_saver = tf.train.import_meta_graph(restore_path + '.meta', clear_devices=True)
-    
-    graph = tf.get_default_graph()
 
-    model_input = graph.get_tensor_by_name('shuffle_batch:0')
-    batch_size = int(model_input.get_shape()[0])
-    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
+    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
     left  = dataloader.left_image_batch
-    
+    right = dataloader.right_image_batch
+    oxts = dataloader.oxts_batch
+
+    model = MonodepthModel(params, args.mode, left, right, oxts)
+
+    # SESSION
+    config = tf.ConfigProto(allow_soft_placement=True)
+    sess = tf.Session(config=config)
+
+    # SAVER
+    train_saver = tf.train.Saver()
+
     # INIT
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
     coordinator = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coordinator)
 
+    # RESTORE
+    if args.checkpoint_path == '':
+        restore_path = tf.train.latest_checkpoint(args.log_directory + '/' + args.model_name)
+    else:
+        restore_path = args.checkpoint_path.split(".")[0]
     train_saver.restore(sess, restore_path)
-
-    #disp = [graph.get_tensor_by_name(x + '/decoder/conv2d_4/Sigmoid:0') for x in ['model', 'model_1', 'model_2', 'model_3']]
-    disp = graph.get_tensor_by_name('disparities/ExpandDims:0')
 
     num_test_samples = count_text_lines(args.filenames_file)
 
     print('now testing {} files'.format(num_test_samples))
     disparities    = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
     disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)   
-    print "you ready for some shit?" 
+
     for step in range(num_test_samples):
         print step
-        image_input = sess.run(left)    # [2, 256, 512, 6]
-        pad = np.zeros([batch_size - 2, 256, 512, 3*args.num_views])
-        image_input = np.concatenate((image_input, pad), axis=0)
-        disp_out = sess.run(disp, feed_dict={model_input:image_input})  # [2, 256, 512]
-        disparities[step] = disp_out[0,:,:].squeeze()
-        disparities_pp[step] = post_process_disparity(disp_out[:2,:,:].squeeze())
+        disp = sess.run(model.disp_left_est[0])
+        disparities[step] = disp[0].squeeze()
+        disparities_pp[step] = post_process_disparity(disp.squeeze())
 
     print('done.')
 
