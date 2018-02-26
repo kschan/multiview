@@ -2,3 +2,4 @@
 images/*
 models/*
 logs/*
+*.swp

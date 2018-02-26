@@ -23,6 +23,7 @@ from monodepth_model import *
 from monodepth_dataloader import *
 from average_gradients import *
 from tensorflow.python.client import timeline
+from scipy.misc import imread
 import subprocess
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
@@ -55,7 +56,7 @@ parser.add_argument('--full_summary',                          help='if set, wil
 parser.add_argument('--num_views',                 type=int,   help="will load num_views into network for multiview testing", default=1)
 parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=1.0)
 
-parser.add_argument('--validation_filenames_file',           type=str, required=True)
+parser.add_argument('--validation_filenames_file',           type=str, default='')
 args = parser.parse_args()
 
 def post_process_disparity(disp):
@@ -143,6 +144,7 @@ def train(params):
 
         # SESSION
         config = tf.ConfigProto(allow_soft_placement=True)
+        config.gpu_options.allow_growth = True
         sess = tf.Session(config=config)
 
         # SAVER
@@ -194,7 +196,7 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if step and step%10000 == 0:
+            if step and step%5000 == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
                 evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --validation_file ' + \
                         args.validation_filenames_file + ' --training_file ' + args.filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
@@ -210,27 +212,6 @@ def train(params):
             
 def test(params):
     """Test function."""
-    # data_path, filenames_file, mode, num_views, model_name, output_directory, log_directory
-
-    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)
-    left  = dataloader.left_image_batch
-    right = dataloader.right_image_batch
-
-    model = MonodepthModel(params, args.mode, left, right)
-
-    # SESSION
-    config = tf.ConfigProto(allow_soft_placement=True)
-    sess = tf.Session(config=config)
-
-    # SAVER
-    train_saver = tf.train.Saver()
-
-    # INIT
-    sess.run(tf.global_variables_initializer())
-    sess.run(tf.local_variables_initializer())
-    coordinator = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(sess=sess, coord=coordinator)
-
     # RESTORE
     if args.checkpoint_path == '':
         # print args.log_directory + '/' + args.model_name
@@ -239,17 +220,41 @@ def test(params):
         restore_path = args.checkpoint_path.split(".")[0]
     
     print "RESTORE PATH", restore_path
+    sess = tf.Session()
+    train_saver = tf.train.import_meta_graph(restore_path + '.meta', clear_devices=True)
+    
+    graph = tf.get_default_graph()
+
+    model_input = graph.get_tensor_by_name('shuffle_batch:0')
+    batch_size = int(model_input.get_shape()[0])
+    dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode, args.num_views)  # changed to add num_views
+    left  = dataloader.left_image_batch
+    
+    # INIT
+    sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())
+    coordinator = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(sess=sess, coord=coordinator)
+
     train_saver.restore(sess, restore_path)
+
+    #disp = [graph.get_tensor_by_name(x + '/decoder/conv2d_4/Sigmoid:0') for x in ['model', 'model_1', 'model_2', 'model_3']]
+    disp = graph.get_tensor_by_name('disparities/ExpandDims:0')
 
     num_test_samples = count_text_lines(args.filenames_file)
 
     print('now testing {} files'.format(num_test_samples))
     disparities    = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
-    disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
+    disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)   
+    print "you ready for some shit?" 
     for step in range(num_test_samples):
-        disp = sess.run(model.disp_left_est[0])
-        disparities[step] = disp[0].squeeze()
-        disparities_pp[step] = post_process_disparity(disp.squeeze())
+        print step
+        image_input = sess.run(left)    # [2, 256, 512, 6]
+        pad = np.zeros([batch_size - 2, 256, 512, 3*args.num_views])
+        image_input = np.concatenate((image_input, pad), axis=0)
+        disp_out = sess.run(disp, feed_dict={model_input:image_input})  # [2, 256, 512]
+        disparities[step] = disp_out[0,:,:].squeeze()
+        disparities_pp[step] = post_process_disparity(disp_out[:2,:,:].squeeze())
 
     print('done.')
 

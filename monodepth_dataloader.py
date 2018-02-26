@@ -78,10 +78,27 @@ class MonodepthDataloader(object):
 
         if mode == 'train':
 
-            # randomly change order of images
             if num_views != 1:
+                # we want to fight the bias on stationary images in the dataset, so occasionally
+                # we feed the network the same two images to represent no flow information.
+                repeat_images = tf.random_uniform([], 0, 1)
+                repeat_threshold = 0.9
+                right_image_o_2 = tf.cond(repeat_images > repeat_threshold,
+                                            lambda: right_image_o_1,
+                                            lambda: right_image_o_2
+                                  )
+                left_image_o_2 = tf.cond(repeat_images > repeat_threshold,
+                                            lambda: left_image_o_1,
+                                            lambda: left_image_o_2
+                                  )
+                oxts_o         = tf.cond(repeat_images > repeat_threshold,
+                                            lambda: oxts_o * 0.0,
+                                            lambda: oxts_o
+                                  )
+                
+                # we randomly change the order of the images to teach it to do sfm generally
                 change_order = tf.random_uniform([], 0, 1)  # if this is > 0.5, swap the images so the second image is first 3 layers
-                change_order_threshold = 1.0
+                change_order_threshold = 0.5
                 right_image_o = tf.cond(change_order > change_order_threshold,
                                     lambda: tf.concat([right_image_o_2, right_image_o_1], axis = 2),
                                     lambda: tf.concat([right_image_o_1, right_image_o_2], axis = 2)
@@ -93,10 +110,9 @@ class MonodepthDataloader(object):
              
                 # TODO: This is a bit dodgy because if we flip the order of the images, we are using the odometry informatinon for the (now) second image
                 oxts = tf.cond(change_order > change_order_threshold, lambda: -oxts_o, lambda: oxts_o) 
-
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
-            threshold = 1.0
+            threshold = 0.5
             left_image  = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
             right_image = tf.cond(do_flip > threshold, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
             # If we flip the images left to right, we need to negate horizontal velocity and rotation
@@ -118,13 +134,19 @@ class MonodepthDataloader(object):
                         params.batch_size, capacity, min_after_dequeue, params.num_threads)
 
         elif mode == 'test':
-            self.left_image_batch = tf.stack([left_image_o,  tf.image.flip_left_right(left_image_o)],  0)
-            self.left_image_batch.set_shape( [2, None, None, 3*num_views])
+            if num_views == 1:
+                self.left_image_batch = tf.stack([left_image_o,  tf.image.flip_left_right(left_image_o)],  0)
+                self.left_image_batch.set_shape( [2, None, None, 3])
 
-            if self.params.do_stereo:
-                self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)
-                self.right_image_batch.set_shape( [2, None, None, 3])
-
+                if self.params.do_stereo:
+                    self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)
+                    self.right_image_batch.set_shape( [2, None, None, 3])
+            else:
+                left_image_o = tf.concat([left_image_o_1, left_image_o_2], axis = 2)
+                left_image = tf.stack([left_image_o,  tf.image.flip_left_right(left_image_o)],  0)
+                left_image.set_shape( [2, None, None, 3*num_views])
+                
+                self.left_image_batch = left_image 
     def flip_stacked_left_right(images):
         # images is a [num_views, None, None, 3] tensor
         num_views = tf.shape(images)[0]
