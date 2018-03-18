@@ -23,6 +23,10 @@ def compute_errors(gt, pred):
 
     return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
 
+def count_lines(filename):
+    with open(filename, 'r') as f:
+        return len(f.readlines())
+
 ###############################################################################
 #######################  KITTI
 
