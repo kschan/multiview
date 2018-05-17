@@ -1,2 +1,0 @@
-python monodepth_main.py --mode test --encoder multiview --data_path /data/kitti_resized/training/ --filenames_file /data/kitti_resized/training/filenames_2_view.txt --log_directory $HOME/logs/ --model_name $1 --output_directory /data/kitti_resized/training/disp_results --num_gpus 1 
-python utils/evaluate_kitti.py --split kitti --predicted_disp_path /data/kitti_resized/training/disp_results/$1/disparities.npy --gt_path /data/kitti_resized/

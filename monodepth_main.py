@@ -53,7 +53,7 @@ parser.add_argument('--checkpoint_path',           type=str,   help='path to a s
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
 parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=1.0)
-
+parser.add_argument('--operator', type=str, default='subtract')
 parser.add_argument('--validation_filenames_file',           type=str, default='')
 args = parser.parse_args()
 
@@ -245,7 +245,7 @@ def test(params):
     disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)   
 
     for step in range(num_test_samples):
-        print step
+        #print step
         disp = sess.run(model.disp_left_est[0])
         disparities[step] = disp[0].squeeze()
         disparities_pp[step] = post_process_disparity(disp.squeeze())
@@ -270,6 +270,12 @@ def test(params):
 
 def main(_):
 
+    operator_map = {'subtract':tf.subtract,
+                    'add':tf.add,
+                    'multiply':tf.multiply,
+                    'divide':tf.divide
+                    }
+
     params = monodepth_parameters(
         encoder=args.encoder,
         height=args.input_height,
@@ -284,7 +290,8 @@ def main(_):
         disp_gradient_loss_weight=args.disp_gradient_loss_weight,
         lr_loss_weight=args.lr_loss_weight,
         odom_loss_weight=args.odom_loss_weight,
-        full_summary=args.full_summary)
+        full_summary=args.full_summary,
+        operator=operator_map[args.operator])
 
     if args.mode == 'train':
         train(params)

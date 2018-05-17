@@ -4,6 +4,7 @@ import os
 import cv2
 from collections import Counter
 import pickle
+import sys
 
 def compute_errors(gt, pred):
     thresh = np.maximum((gt / pred), (pred / gt))
@@ -20,8 +21,18 @@ def compute_errors(gt, pred):
     abs_rel = np.mean(np.abs(gt - pred) / gt)
 
     sq_rel = np.mean(((gt - pred)**2) / gt)
+    
+    # Scale invariant error from "Depth Map Prediction from a Single IMage using
+    # a Multi-scale deep network"
+    n = len(gt)
+    alpha = 1./n * np.sum(np.log(gt) - np.log(pred))
+    scale_invariant_error = 1./n * np.sum((np.log(pred) - np.log(gt) + alpha)**2)
+    
+    return abs_rel, sq_rel, rmse, rmse_log, scale_invariant_error, a1, a2, a3
 
-    return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
+def count_lines(filename):
+    with open(filename, 'r') as f:
+        return len(f.readlines())
 
 ###############################################################################
 #######################  KITTI
@@ -40,7 +51,7 @@ def load_gt_disp_kitti(path):
         gt_disparities.append(disp)
     return gt_disparities
 
-def convert_disps_to_depths_kitti(gt_disparities, pred_disparities):
+def convert_disps_to_depths_kitti(gt_disparities, pred_disparities, dataset):
     gt_depths = []
     pred_depths = []
     pred_disparities_resized = []
@@ -56,8 +67,14 @@ def convert_disps_to_depths_kitti(gt_disparities, pred_disparities):
 
         mask = gt_disp > 0
 
-        gt_depth = width_to_focal[width] * 0.54 / (gt_disp + (1.0 - mask))
-        pred_depth = width_to_focal[width] * 0.54 / pred_disp
+        gt_depth = width_to_focal[width] * 0.54 / (gt_disp + (1.0 - mask)) # kitti has 0.54m baseline
+        if dataset == 'kitti':
+            pred_depth = width_to_focal[width] * 0.54 / pred_disp
+        elif dataset == 'flying':
+            pred_depth = 1050*0.54 / pred_disp
+        else:
+            print "invalid dataset"
+            sys.exit(0)
 
         gt_depths.append(gt_depth)
         pred_depths.append(pred_depth)

@@ -35,6 +35,7 @@ class MonodepthDataloader(object):
         split_line = tf.string_split([line]).values
 
         # we load only one image for test, except if we trained a stereo model
+
         # if mode == 'test' and not self.params.do_stereo:
         #     left_image_path  = tf.string_join([self.data_path, split_line[0]])
         #     left_image_o  = self.read_image(left_image_path)
@@ -46,28 +47,29 @@ class MonodepthDataloader(object):
         right_image_o_1 = self.read_image(tf.string_join([self.data_path, split_line[2]]))
         right_image_o_2 = self.read_image(tf.string_join([self.data_path, split_line[3]]))
 
+        if self.dataset == 'kitti':
+            path = tf.string_split([split_line[0]], delimiter='/').values
+            self.oxts_path = tf.string_join([self.data_path, path[0], '/', path[1], '/oxts/data/', tf.string_split([path[-1]], delimiter='.').values[0], '.txt'])
+            all_oxts_strings = tf.read_file(self.oxts_path)
+            all_oxts_strings = tf.string_split([all_oxts_strings], delimiter=' ')
+            all_oxts_strings = tf.sparse_tensor_to_dense(all_oxts_strings, default_value='0')
+            all_oxts = tf.string_to_number(all_oxts_strings, out_type=tf.float64)
+            all_oxts = tf.reshape(all_oxts, [-1])
 
-        path = tf.string_split([split_line[0]], delimiter='/').values
-        self.oxts_path = tf.string_join([self.data_path, path[0], '/', path[1], '/oxts/data/', tf.string_split([path[-1]], delimiter='.').values[0], '.txt'])
-        all_oxts_strings = tf.read_file(self.oxts_path)
-        all_oxts_strings = tf.string_split([all_oxts_strings], delimiter=' ')
-        all_oxts_strings = tf.sparse_tensor_to_dense(all_oxts_strings, default_value='0')
-        all_oxts = tf.string_to_number(all_oxts_strings, out_type=tf.float64)
-        all_oxts = tf.reshape(all_oxts, [-1])
+            # Velocities
+            # vf_o = oxts[8]    # FORWARD VELOCITY [m/s]
+            # vl_o = oxts[9]    # LEFTWARDS VELOCITY
+            # vu_o = oxts[10]   # UP VELOCITY
 
-        # Velocities
-        # vf_o = oxts[8]    # FORWARD VELOCITY [m/s]
-        # vl_o = oxts[9]    # LEFTWARDS VELOCITY
-        # vu_o = oxts[10]   # UP VELOCITY
+            # wf_o = oxts[20]   # FORWARD AXIS ROTATION
+            # wl_o = oxts[21]   # LEFTWARDS AXIS ROTATION
+            # wu_o = oxts[22]   # UPWARDS AXIS ROTATION
 
-        # wf_o = oxts[20]   # FORWARD AXIS ROTATION
-        # wl_o = oxts[21]   # LEFTWARDS AXIS ROTATION
-        # wu_o = oxts[22]   # UPWARDS AXIS ROTATION
-
-        oxts_o = tf.concat([all_oxts[8:11], all_oxts[20:23]], axis=0) / \
-                    np.array([VF_VARIANCE, VL_VARIANCE, VU_VARIANCE, WF_VARIANCE, WL_VARIANCE, WU_VARIANCE])**0.5
-        # normalize oxts according to parameters in constants.py
-
+            oxts_o = tf.concat([all_oxts[8:11], all_oxts[20:23]], axis=0) / \
+                        np.array([VF_VARIANCE, VL_VARIANCE, VU_VARIANCE, WF_VARIANCE, WL_VARIANCE, WU_VARIANCE])**0.5
+            # normalize oxts according to parameters in constants.py
+        else:
+            oxts_o = np.array([0., 0., 0., 0., 0., 0.])
         if mode == 'train':
             # we want to fight the bias on stationary images in the dataset, so occasionally
             # we feed the network the same two images to represent no flow information.
@@ -88,7 +90,7 @@ class MonodepthDataloader(object):
             
             # we randomly change the order of the images to teach it to do sfm generally
             change_order = tf.random_uniform([], 0, 1)  # if this is > 0.5, swap the images so the second image is first 3 layers
-            change_order_threshold = 0.5
+            change_order_threshold = 1.0
             right_image_o = tf.cond(change_order > change_order_threshold,
                                 lambda: tf.concat([right_image_o_2, right_image_o_1], axis = 2),
                                 lambda: tf.concat([right_image_o_1, right_image_o_2], axis = 2)
@@ -177,4 +179,5 @@ class MonodepthDataloader(object):
             image  = tf.image.resize_images(image,  [self.params.height, self.params.width], tf.image.ResizeMethod.AREA)
         else:
             image.set_shape([256, 512, 3])
+
         return image
