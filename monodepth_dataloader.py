@@ -35,6 +35,7 @@ class MonodepthDataloader(object):
         split_line = tf.string_split([line]).values
 
         # we load only one image for test, except if we trained a stereo model
+
         # if mode == 'test' and not self.params.do_stereo:
         #     left_image_path  = tf.string_join([self.data_path, split_line[0]])
         #     left_image_o  = self.read_image(left_image_path)
@@ -177,4 +178,5 @@ class MonodepthDataloader(object):
             image  = tf.image.resize_images(image,  [self.params.height, self.params.width], tf.image.ResizeMethod.AREA)
         else:
             image.set_shape([256, 512, 3])
+
         return image
