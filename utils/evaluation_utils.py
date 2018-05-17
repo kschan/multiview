@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-import cv, cv2
+import cv2
 from collections import Counter
 import pickle
 
@@ -23,6 +23,10 @@ def compute_errors(gt, pred):
 
     return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
 
+def count_lines(filename):
+    with open(filename, 'r') as f:
+        return len(f.readlines())
+
 ###############################################################################
 #######################  KITTI
 
@@ -36,7 +40,7 @@ def load_gt_disp_kitti(path):
     gt_disparities = []
     for i in range(200):
         disp = cv2.imread(path + "/training/disp_noc_0/" + str(i).zfill(6) + "_10.png", -1)
-        disp = disp.astype(np.float32) / 256
+        disp = disp.astype(np.float32) / 256.
         gt_disparities.append(disp)
     return gt_disparities
 

@@ -19,10 +19,12 @@ import re
 import time
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
 from monodepth_model import *
 from monodepth_dataloader import *
 from average_gradients import *
+from tensorflow.python.client import timeline
+from scipy.misc import imread
+import subprocess
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
 
@@ -30,7 +32,7 @@ parser.add_argument('--mode',                      type=str,   help='train or te
 parser.add_argument('--model_name',                type=str,   help='model name', default='monodepth')
 parser.add_argument('--encoder',                   type=str,   help='type of encoder, vgg or resnet50', default='vgg')
 parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti, or cityscapes', default='kitti')
-parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
+parser.add_argument('--data_path',                 type=str,   help='path to the data', default='/data/kitti_resized/')
 parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
 parser.add_argument('--input_height',              type=int,   help='input height', default=256)
 parser.add_argument('--input_width',               type=int,   help='input width', default=512)
@@ -43,14 +45,16 @@ parser.add_argument('--disp_gradient_loss_weight', type=float, help='disparity s
 parser.add_argument('--do_stereo',                             help='if set, will train the stereo model', action='store_true')
 parser.add_argument('--wrap_mode',                 type=str,   help='bilinear sampler wrap mode, edge or border', default='border')
 parser.add_argument('--use_deconv',                            help='if set, will use transposed convolutions', action='store_true')
-parser.add_argument('--num_gpus',                  type=int,   help='number of GPUs to use for training', default=1)
-parser.add_argument('--num_threads',               type=int,   help='number of threads to use for data loading', default=8)
+parser.add_argument('--num_gpus',                  type=int,   help='number of GPUs to use for training', default=4)
+parser.add_argument('--num_threads',               type=int,   help='number of threads to use for data loading', default=40)
 parser.add_argument('--output_directory',          type=str,   help='output directory for test disparities, if empty outputs to checkpoint folder', default='')
-parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
+parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='/home/kevin/logs/')
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a specific checkpoint to load', default='')
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--full_summary',                          help='if set, will keep more data for each summary. Warning: the file can become very large', action='store_true')
+parser.add_argument('--odom_loss_weight',           type=float, help="scaling factor for odometry loss term", default=1.0)
 
+parser.add_argument('--validation_filenames_file',           type=str, default='')
 args = parser.parse_args()
 
 def post_process_disparity(disp):
@@ -95,10 +99,12 @@ def train(params):
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
+        oxts = dataloader.oxts_batch
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
+        oxts_splits  = tf.split(oxts,  args.num_gpus, 0)
 
         tower_grads  = []
         tower_losses = []
@@ -106,9 +112,8 @@ def train(params):
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
-
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], reuse_variables, i)
-
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], oxts_splits[i], reuse_variables, i)
+                   
                     loss = model.total_loss
                     tower_losses.append(loss)
 
@@ -118,9 +123,16 @@ def train(params):
 
                     tower_grads.append(grads)
 
-        grads = average_gradients(tower_grads)
+        gradients, variables = zip(*average_gradients(tower_grads))
+        gradients, _ = tf.clip_by_global_norm(gradients, 1E5)
+        grads = zip(gradients, variables)
 
-        apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
+        for grad in grads:
+            tf.summary.histogram(grad[1].name+'_grad', grad[0], ['model_0'])
+        
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
 
         total_loss = tf.reduce_mean(tower_losses)
 
@@ -130,6 +142,7 @@ def train(params):
 
         # SESSION
         config = tf.ConfigProto(allow_soft_placement=True)
+        config.gpu_options.allow_growth = True
         sess = tf.Session(config=config)
 
         # SAVER
@@ -158,9 +171,20 @@ def train(params):
         # GO!
         start_step = global_step.eval(session=sess)
         start_time = time.time()
+
+        print "LEFT SHAPE: ", tf.shape(left).eval(session=sess)
+
+        # options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        # run_metadata = tf.RunMetadata()
+        # num_total_steps = 1000
+
+        print "STARTING"
         for step in range(start_step, num_total_steps):
             before_op_time = time.time()
+            # _, loss_value = sess.run([apply_gradient_op, total_loss], options=options, run_metadata=run_metadata)
+
             _, loss_value = sess.run([apply_gradient_op, total_loss])
+            
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
@@ -170,19 +194,29 @@ def train(params):
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
-            if step and step % 10000 == 0:
+            if step and step%5000 == 0:
                 train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
+                evaluate_command = 'CUDA_VISIBLE_DEVICES='' python utils/evaluate_odom.py --data_path ' + args.data_path + ' --validation_file ' + \
+                        args.validation_filenames_file + ' --training_file ' + args.filenames_file + ' --log_directory ' + args.log_directory + '/' + args.model_name
+                #print evaluate_command
+                #pipe = subprocess.Popen(evaluate_command, shell=True, stdout=subprocess.PIPE).stdout
 
         train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
 
+        # fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+        # chrome_trace = fetched_timeline.generate_chrome_trace_format()
+        # with open('timeline_01.json', 'w') as f:
+            # f.write(chrome_trace)
+            
 def test(params):
     """Test function."""
 
     dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
     left  = dataloader.left_image_batch
     right = dataloader.right_image_batch
+    oxts = dataloader.oxts_batch
 
-    model = MonodepthModel(params, args.mode, left, right)
+    model = MonodepthModel(params, args.mode, left, right, oxts)
 
     # SESSION
     config = tf.ConfigProto(allow_soft_placement=True)
@@ -208,8 +242,10 @@ def test(params):
 
     print('now testing {} files'.format(num_test_samples))
     disparities    = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
-    disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
+    disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)   
+
     for step in range(num_test_samples):
+        print step
         disp = sess.run(model.disp_left_est[0])
         disparities[step] = disp[0].squeeze()
         disparities_pp[step] = post_process_disparity(disp.squeeze())
@@ -220,7 +256,13 @@ def test(params):
     if args.output_directory == '':
         output_directory = os.path.dirname(args.checkpoint_path)
     else:
-        output_directory = args.output_directory
+        output_directory = args.output_directory + '/' + args.model_name
+    
+    try:
+        os.makedirs(output_directory)
+    except OSError as e:
+        pass
+
     np.save(output_directory + '/disparities.npy',    disparities)
     np.save(output_directory + '/disparities_pp.npy', disparities_pp)
 
@@ -241,6 +283,7 @@ def main(_):
         alpha_image_loss=args.alpha_image_loss,
         disp_gradient_loss_weight=args.disp_gradient_loss_weight,
         lr_loss_weight=args.lr_loss_weight,
+        odom_loss_weight=args.odom_loss_weight,
         full_summary=args.full_summary)
 
     if args.mode == 'train':
