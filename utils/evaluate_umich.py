@@ -9,11 +9,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description='Evaluation on the Kevin dataset')
 
 parser.add_argument('--predicted_disp_path', type=str,   help='path to estimated disparities',      required=True)
-<<<<<<< HEAD
 parser.add_argument('--data_path',             type=str,   help='path to ground truth disparities',   required=True)
-=======
-parser.add_argument('--gt_path',             type=str,   help='path to ground truth disparities',   required=True)
->>>>>>> b58f33c930b59c4915943f957a8caa9c53bc9386
 parser.add_argument('--filenames_file',      type=str,   help='filenames_file',                     required=True)
 
 args = parser.parse_args()
@@ -21,11 +17,11 @@ args = parser.parse_args()
 if __name__ == '__main__':
 
     pred_disparities = np.load(args.predicted_disp_path)
-    pred_disparities = np.array([resize(disp, (240, 320)) * 320 for disp in pred_disparities])
+    pred_disparities = np.array([resize(disp, (400, 800)) * 800 for disp in pred_disparities])
     num_samples = count_lines(args.filenames_file)
 
     print pred_disparities.shape 
-    pred_depths = 160.5 * 0.54/pred_disparities
+    pred_depths = 399.433 * 0.54/pred_disparities
     pred_depths[pred_depths>50] = 50
     rms     = np.zeros(num_samples, np.float32)
     log_rms = np.zeros(num_samples, np.float32)
@@ -39,9 +35,9 @@ if __name__ == '__main__':
     with open(args.filenames_file, 'r') as f:
         for i in range(num_samples):
             splits = re.split('/|\.| |', f.readline())
-            dataset = splits[0]
+            
             file_num = splits[2]
-            gt_file = args.data_path + dataset + '/depth/' + file_num + '.npy'
+            gt_file = args.data_path + file_num + '.npy'
             gt_depth = np.load(gt_file)
             pred_depth = pred_depths[i]
              

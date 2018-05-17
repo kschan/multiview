@@ -33,7 +33,8 @@ monodepth_parameters = namedtuple('parameters',
                         'disp_gradient_loss_weight, '
                         'lr_loss_weight, '
                         'odom_loss_weight, '
-                        'full_summary')
+                        'full_summary, '
+                        'operator')
 
 class MonodepthModel(object):
     """monodepth model"""
@@ -46,7 +47,7 @@ class MonodepthModel(object):
         self.odom = odom
         self.model_collection = ['model_' + str(model_index)]
         self.reuse_variables = reuse_variables
-
+        self.operator = params.operator
         self.build_model()
 
         if self.mode == 'test':
@@ -210,15 +211,15 @@ class MonodepthModel(object):
             conv7_2 = self.conv_block(conv6_2,            512, 3, name='conv7', reuse=True) # H/128   [batch, 2, 4, 512]
 
         with tf.variable_scope('skips'):
-            skip1 = conv1_1 - conv1_2
-            skip2 = conv2_1 - conv2_2
-            skip3 = conv3_1 - conv3_2
-            skip4 = conv4_1 - conv4_2
-            skip5 = conv5_1 - conv5_2
-            skip6 = conv6_1 - conv6_2
+            skip1 = self.operator(conv1_1, conv1_2)
+            skip2 = self.operator(conv2_1, conv2_2)
+            skip3 = self.operator(conv3_1, conv3_2)
+            skip4 = self.operator(conv4_1, conv4_2)
+            skip5 = self.operator(conv5_1, conv5_2)
+            skip6 = self.operator(conv6_1, conv6_2)
         
         with tf.variable_scope('decoder'):
-            conv7_diff = conv7_1 - conv7_2
+            conv7_diff = self.operator(conv7_1, conv7_2) 
 
             tf.summary.histogram('conv7_diff', conv7_diff, collections=self.model_collection)
             upconv7 = upconv(conv7_diff,  512, 3, 2, name='upconv7') #H/64
@@ -256,25 +257,15 @@ class MonodepthModel(object):
             iconv1  = conv(concat1,   16, 3, 1, name='iconv1')
             self.disp1 = self.get_disp(iconv1)
             
-            print "disp4: ", self.disp4
-            print "disp3: ", self.disp3
-            print "disp2: ", self.disp2
-            print "disp1: ", self.disp1
+            # print "disp4: ", self.disp4
+            # print "disp3: ", self.disp3
+            # print "disp2: ", self.disp2
+            # print "disp1: ", self.disp1
             
             tf.summary.histogram('disp1', self.disp1, collections=self.model_collection)
             tf.summary.histogram('disp2', self.disp2, collections=self.model_collection)
             tf.summary.histogram('disp3', self.disp3, collections=self.model_collection)
             tf.summary.histogram('disp4', self.disp4, collections=self.model_collection)
-
-        '''with tf.variable_scope('egomotion'): 
-            #conv7 = tf.concat([conv7_1], axis=3)
-            conv7 = conv7_1
-            print "conv7: ", conv7
-            conv8 = tf.layers.conv2d(conv7, 64, 2, activation=tf.nn.leaky_relu)
-            # tf.summary.histogram(conv8.name, conv8, collections=self.model_collection)
-            conv8_flat = tf.contrib.layers.flatten(inputs=conv8)
-            self.odom_prediction = dense(conv8_flat, 2, name='odom_prediction')  # this is fed into a softmax_cross_entropy_with_logits, so don't softmax here
-        '''
 
         self.build_outputs()
         if self.mode == 'test':
@@ -282,28 +273,77 @@ class MonodepthModel(object):
 
         self.build_monodepth_loss()
 
-        '''
-        # ODOM LOSS
-        vf = self.odom[:, 0]
-        print vf
-        vl = self.odom[:, 1]
-        angles = tf.atan2(vf, vl) * 180/np.pi
-        print "angles before add: ", angles
-        angles = (angles + 360.)%360.
-        print "angles:", angles
-        speeds = vf**2 + vl**2
-        
-        # this will  bin angles into 4 90 degree sectors
-        # binned_angles = tf.to_int64((angles + 45)//90)%4
-        binned_angles = tf.to_int64(angles > 180)
-        binned_speeds = tf.to_int64(speeds > 0.9)
+    def build_naive(self):
+        #set convenience functions
+        conv = self.conv
+        if self.params.use_deconv:
+            upconv = self.deconv
+        else:
+            upconv = self.upconv
 
-        self.odom_labels = binned_angles
-        print "binned_angles:", binned_angles
-        print "binned_speeds:", binned_speeds
-        print "odom_labels:, ", self.odom_labels
-        self.odom_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.odom_labels, logits=self.odom_prediction))
-        '''
+        with tf.variable_scope('encoder'):
+            conv1 = self.conv_block(self.model_input,  32, 7) # H/2
+            conv2 = self.conv_block(conv1,             64, 5) # H/4
+            conv3 = self.conv_block(conv2,            128, 3) # H/8
+            conv4 = self.conv_block(conv3,            256, 3) # H/16
+            conv5 = self.conv_block(conv4,            512, 3) # H/32
+            conv6 = self.conv_block(conv5,            512, 3) # H/64
+            conv7 = self.conv_block(conv6,            512, 3) # H/128
+
+        with tf.variable_scope('skips'):
+            skip1 = conv1
+            skip2 = conv2
+            skip3 = conv3
+            skip4 = conv4
+            skip5 = conv5
+            skip6 = conv6
+        
+        with tf.variable_scope('decoder'):
+            upconv7 = upconv(conv7,  512, 3, 2) #H/64
+            concat7 = tf.concat([upconv7, skip6], 3)
+            iconv7  = conv(concat7,  512, 3, 1)
+
+            upconv6 = upconv(iconv7, 512, 3, 2) #H/32
+            concat6 = tf.concat([upconv6, skip5], 3)
+            iconv6  = conv(concat6,  512, 3, 1)
+
+            upconv5 = upconv(iconv6, 256, 3, 2) #H/16
+            concat5 = tf.concat([upconv5, skip4], 3)
+            iconv5  = conv(concat5,  256, 3, 1)
+
+            upconv4 = upconv(iconv5, 128, 3, 2) #H/8
+            concat4 = tf.concat([upconv4, skip3], 3)
+            iconv4  = conv(concat4,  128, 3, 1)
+            self.disp4 = self.get_disp(iconv4)
+            udisp4  = self.upsample_nn(self.disp4, 2)
+
+            upconv3 = upconv(iconv4,  64, 3, 2) #H/4
+            concat3 = tf.concat([upconv3, skip2, udisp4], 3)
+            iconv3  = conv(concat3,   64, 3, 1)
+            self.disp3 = self.get_disp(iconv3)
+            udisp3  = self.upsample_nn(self.disp3, 2)
+
+            upconv2 = upconv(iconv3,  32, 3, 2) #H/2
+            concat2 = tf.concat([upconv2, skip1, udisp3], 3)
+            iconv2  = conv(concat2,   32, 3, 1)
+            self.disp2 = self.get_disp(iconv2)
+            udisp2  = self.upsample_nn(self.disp2, 2)
+
+            upconv1 = upconv(iconv2,  16, 3, 2) #H
+            concat1 = tf.concat([upconv1, udisp2], 3)
+            iconv1  = conv(concat1,   16, 3, 1)
+            self.disp1 = self.get_disp(iconv1)
+            
+            print "disp4: ", self.disp4
+            print "disp3: ", self.disp3
+            print "disp2: ", self.disp2
+            print "disp1: ", self.disp1
+        
+        self.build_outputs()
+        if self.mode == 'test':
+            return
+
+        self.build_monodepth_loss()
 
     def build_vgg(self):
         #set convenience functions
@@ -451,6 +491,8 @@ class MonodepthModel(object):
                     self.build_resnet50()
                 elif self.params.encoder == 'multiview':
                     self.build_multiview()
+                elif self.params.encoder == 'naive':
+                    self.build_naive()
                 else:
                     return None
 

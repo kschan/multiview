@@ -20,9 +20,8 @@ if __name__ == '__main__':
 
     if args.split == 'kitti':
         num_samples = 200
-        
         gt_disparities = load_gt_disp_kitti(args.gt_path)
-        gt_depths, pred_depths, pred_disparities_resized = convert_disps_to_depths_kitti(gt_disparities, pred_disparities)
+        gt_depths, pred_depths, pred_disparities_resized = convert_disps_to_depths_kitti(gt_disparities, pred_disparities, 'kitti')
 
     elif args.split == 'eigen':
         num_samples = 697
@@ -50,6 +49,7 @@ if __name__ == '__main__':
     rms     = np.zeros(num_samples, np.float32)
     log_rms = np.zeros(num_samples, np.float32)
     abs_rel = np.zeros(num_samples, np.float32)
+    scale_inv = np.zeros(num_samples, np.float32)
     sq_rel  = np.zeros(num_samples, np.float32)
     d1_all  = np.zeros(num_samples, np.float32)
     a1      = np.zeros(num_samples, np.float32)
@@ -94,7 +94,7 @@ if __name__ == '__main__':
             bad_pixels = np.logical_and(disp_diff >= 3, (disp_diff / gt_disp[mask]) >= 0.05)
             d1_all[i] = 100.0 * bad_pixels.sum() / mask.sum()
 
-        abs_rel[i], sq_rel[i], rms[i], log_rms[i], a1[i], a2[i], a3[i] = compute_errors(gt_depth[mask], pred_depth[mask])
+            abs_rel[i], sq_rel[i], rms[i], log_rms[i], scale_inv[i], a1[i], a2[i], a3[i] = compute_errors(gt_depth[mask], pred_depth[mask])
 
-    print("{:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}".format('abs_rel', 'sq_rel', 'rms', 'log_rms', 'd1_all', 'a1', 'a2', 'a3'))
-    print("{:10.4f}, {:10.4f}, {:10.3f}, {:10.3f}, {:10.3f}, {:10.3f}, {:10.3f}, {:10.3f}".format(abs_rel.mean(), sq_rel.mean(), rms.mean(), log_rms.mean(), d1_all.mean(), a1.mean(), a2.mean(), a3.mean()))
+    print("{:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}".format('abs_rel', 'sq_rel', 'scale_inv', 'rms', 'log_rms', 'a1', 'a2', 'a3'))
+    print("{:11.4f}, {:10.4f}, {:10.4f}, {:10.3f}, {:10.3f}, {:10.3f}, {:10.3f}, {:10.3f}".format(abs_rel.mean(), sq_rel.mean(), scale_inv.mean(), rms.mean(), log_rms.mean(), a1.mean(), a2.mean(), a3.mean()))
