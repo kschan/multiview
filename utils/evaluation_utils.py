@@ -34,6 +34,10 @@ def count_lines(filename):
     with open(filename, 'r') as f:
         return len(f.readlines())
 
+def count_lines(filename):
+    with open(filename, 'r') as f:
+        return len(f.readlines())
+
 ###############################################################################
 #######################  KITTI
 

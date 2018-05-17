@@ -9,7 +9,11 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description='Evaluation on the Kevin dataset')
 
 parser.add_argument('--predicted_disp_path', type=str,   help='path to estimated disparities',      required=True)
+<<<<<<< HEAD
 parser.add_argument('--data_path',             type=str,   help='path to ground truth disparities',   required=True)
+=======
+parser.add_argument('--gt_path',             type=str,   help='path to ground truth disparities',   required=True)
+>>>>>>> b58f33c930b59c4915943f957a8caa9c53bc9386
 parser.add_argument('--filenames_file',      type=str,   help='filenames_file',                     required=True)
 
 args = parser.parse_args()
